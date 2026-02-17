@@ -2,15 +2,17 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ main ] # Scatta ogni volta che carichi file su main
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      
-      - uses: subosito/flutter-action@v2
+      - name: Checkout code
+        uses: actions/checkout@v4 # Aggiornato da v3 a v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           
@@ -18,10 +20,11 @@ jobs:
         run: flutter pub get
         
       - name: Build Web
+        # Il flag --base-href serve a gestire correttamente i percorsi su GitHub Pages
         run: flutter build web --release --base-href /${{ github.event.repository.name }}/
         
       - name: Upload production-ready build artifacts
-        uses: actions/upload-pages-artifact@v2
+        uses: actions/upload-pages-artifact@v3 # Aggiornato da v2 a v3
         with:
           path: build/web
 
@@ -37,4 +40,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v2
+        uses: actions/deploy-pages@v4 # Aggiornato da v2 a v4
