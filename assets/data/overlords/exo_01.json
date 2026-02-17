@@ -1,0 +1,116 @@
+{
+  "id": "exo_01",
+  "name": "EXO-01: Il Guardiano",
+  "description": "Un costrutto antico che converte il danno in energia instabile.",
+  "scaling": {
+    "hp_fase1": { "2": 20, "3": 30, "4": 40 },
+    "hp_fase2": { "2": 15, "3": 25, "4": 35 },
+    "rendita": { "2": 3, "3": 2, "4": 1 }
+  },
+  "pools": {
+    "fast": [
+      {
+        "name": "Pressa Idraulica",
+        "type": "Rapida",
+        "cost": "⚫⚫",
+        "effect": "2 Danni (4 se immobilizzato)"
+      },
+      {
+        "name": "Bobina di Tesla",
+        "type": "Rapida",
+        "cost": "🟡🟡",
+        "effect": "1 Danno + Conduttore"
+      },
+      {
+        "name": "Pugno a Molla",
+        "type": "Rapida",
+        "cost": "🔴⚫",
+        "effect": "1 Danno + Spinta 2 caselle"
+      },
+      {
+        "name": "Scarica Statica",
+        "type": "Rapida",
+        "cost": "🟡⚫",
+        "effect": "1 Danno a tutti i bagnati"
+      }
+    ],
+    "medium": [
+      {
+        "name": "Protocollo: Magnete",
+        "type": "Media",
+        "cost": "🔵🔵🔴",
+        "effect": "Attira eroi di 3 caselle"
+      },
+      {
+        "name": "Sfiato di Vapore",
+        "type": "Media",
+        "cost": "🔴🔴🟢",
+        "effect": "+2 Armatura e Nube di Vapore"
+      },
+      {
+        "name": "Campo di Forza",
+        "type": "Media",
+        "cost": "🔵🔵⚫⚫",
+        "effect": "Immune ai danni fino al prossimo turno"
+      },
+      {
+        "name": "Laser di Puntamento",
+        "type": "Media",
+        "cost": "🟡🟡🟡🔴",
+        "effect": "4 Danni a bersaglio singolo"
+      }
+    ],
+    "ultimate": [
+      {
+        "name": "Onda d'Urto Sismica",
+        "type": "Ultimate",
+        "cost": "🔴🔵🟢🟡⚫⚫",
+        "effect": "3 Danni mappa + Spinta 3"
+      },
+      {
+        "name": "Meltdown Nucleare",
+        "type": "Ultimate",
+        "cost": "🔴🔴🟡🟡⚫⚫",
+        "effect": "5 Danni a tutti gli adiacenti + Bruciato"
+      }
+    ],
+    "chaos": [
+      {
+        "name": "Autoriparazione",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Recupera 5 HP"
+      },
+      {
+        "name": "Overclock",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Esegui 1 Azione extra ora"
+      },
+      {
+        "name": "Evoca Drone",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Evoca un Drone Riparatore"
+      },
+      {
+        "name": "Ventilazione Forzata",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Rimuovi tutti gli stati negativi"
+      },
+      {
+        "name": "Cortina Fumogena",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Nessuno può attaccare a distanza"
+      },
+      {
+        "name": "Riavvio Sistemi",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Reset immediato dei cooldown"
+      }
+    ]
+  }
+}

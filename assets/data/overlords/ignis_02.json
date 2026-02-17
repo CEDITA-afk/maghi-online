@@ -1,0 +1,116 @@
+{
+  "id": "ignis_02",
+  "name": "IGNIS-02: Nucleo Instabile",
+  "description": "Un reattore in fusione che brucia tutto ciò che tocca. Alta offesa, bassa difesa.",
+  "scaling": {
+    "hp_fase1": { "2": 18, "3": 25, "4": 35 },
+    "hp_fase2": { "2": 15, "3": 20, "4": 30 },
+    "rendita": { "2": 3, "3": 2, "4": 1 }
+  },
+  "pools": {
+    "fast": [
+      {
+        "name": "Dardo Rovente",
+        "type": "Rapida",
+        "cost": "🔴⚫",
+        "effect": "2 Danni (4 se il bersaglio è Bruciato)"
+      },
+      {
+        "name": "Vampata",
+        "type": "Rapida",
+        "cost": "🔴🔴",
+        "effect": "1 Danno a tutti gli eroi adiacenti"
+      },
+      {
+        "name": "Scintilla",
+        "type": "Rapida",
+        "cost": "🟡⚫",
+        "effect": "1 Danno + applica Bruciato"
+      },
+      {
+        "name": "Spinta Termica",
+        "type": "Rapida",
+        "cost": "🔵⚫",
+        "effect": "Spingi un eroe di 2 caselle"
+      }
+    ],
+    "medium": [
+      {
+        "name": "Muro di Fiamme",
+        "type": "Media",
+        "cost": "🔴🔴🔴",
+        "effect": "Crea Lava su una riga intera"
+      },
+      {
+        "name": "Incenerire",
+        "type": "Media",
+        "cost": "🔴🔴🟡🟡",
+        "effect": "5 Danni a bersaglio singolo"
+      },
+      {
+        "name": "Fumo Soffocante",
+        "type": "Media",
+        "cost": "🟢🟢⚫",
+        "effect": "Tutti gli eroi perdono 1 Azione il prossimo turno"
+      },
+      {
+        "name": "Scudo di Magma",
+        "type": "Media",
+        "cost": "🔴🔴🔵",
+        "effect": "+3 Armatura. Chi attacca subisce 1 Danno"
+      }
+    ],
+    "ultimate": [
+      {
+        "name": "Supernova",
+        "type": "Ultimate",
+        "cost": "🔴🔴🔴🟡🟡🟡",
+        "effect": "4 Danni a TUTTI gli eroi + Bruciato"
+      },
+      {
+        "name": "Fusione Nucleare",
+        "type": "Ultimate",
+        "cost": "🔴🔴🔴🔴⚫⚫",
+        "effect": "Distruggi tutti i ripari e infliggi 3 Danni puri"
+      }
+    ],
+    "chaos": [
+      {
+        "name": "Accensione",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Applica Bruciato a un eroe casuale"
+      },
+      {
+        "name": "Alimentare le Fiamme",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "+1 danno a tutte le abilità di Fuoco questo turno"
+      },
+      {
+        "name": "Eruzione",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Trasforma la casella sotto un eroe in Lava"
+      },
+      {
+        "name": "Radiazione",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Gli eroi non possono curarsi questo turno"
+      },
+      {
+        "name": "Sovraccarico",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Il Boss subisce 2 danni ma recupera 2 Azioni"
+      },
+      {
+        "name": "Cenere",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Riduce il range di tutti gli eroi di 1"
+      }
+    ]
+  }
+}

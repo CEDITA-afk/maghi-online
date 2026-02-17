@@ -1,0 +1,4 @@
+| Nome | Turno | Disinnesco | Effetto |
+| :--- | :--- | :--- | :--- |
+| Surriscaldamento | 3 | 4 Dadi | Pavimento Conduttore |
+| Autoriparazione | 6 | 5 Dadi | Recupera 10 HP |
