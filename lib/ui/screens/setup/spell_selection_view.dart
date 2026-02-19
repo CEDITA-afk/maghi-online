@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../models/spell.dart';
 import '../../../models/enums.dart';
+import '../../widgets/spell_card.dart';
 
 class SpellSelectionView extends StatefulWidget {
   final Elemento element;
@@ -21,111 +22,106 @@ class SpellSelectionView extends StatefulWidget {
 }
 
 class _SpellSelectionViewState extends State<SpellSelectionView> {
-  // Mappa degli slot (0-9) e della magia assegnata
   final Map<int, Spell> _selectedSlots = {};
-  
-  // Regole descrittive per ogni slot
-  late final List<String> _slotDescriptions;
+  late final List<SlotDefinition> _slotRules;
 
   @override
   void initState() {
     super.initState();
-    _slotDescriptions = [
-      "Base (Costo 1 Puro)",
-      "Core (Costo 2 Puro)",
-      "Utility (Costo 2 Ibrido)",
-      "Impatto (Costo 3)",
-      "ULTIMATE",
-      "Sinergia (Costo 2)",
-      "Heavy (Costo 3)",
-      "Tecnica (Costo 3+)",
-      "Wildcard",
-      "Wildcard",
-    ];
-
-    // Carica la selezione iniziale se presente
+    _initSlotRules();
     for (int i = 0; i < widget.initialSelection.length && i < 10; i++) {
-      _selectedSlots[i] = widget.initialSelection[i];
+       _selectedSlots[i] = widget.initialSelection[i];
     }
   }
 
-  // Metodo per svuotare completamente il grimorio
   void _clearAll() {
     setState(() {
       _selectedSlots.clear();
     });
   }
 
-  bool _isPure(Spell s) => s.costo.every((c) => c == widget.element);
-
-  // Filtra le magie disponibili per uno specifico slot
-  List<Spell> _getAvailableForSlot(int index) {
-    return widget.allSpells.where((s) {
-      // Evita duplicati nello stesso grimorio
-      if (_selectedSlots.values.contains(s)) return false;
-
-      switch (index) {
-        case 0: return s.costo.length == 1 && _isPure(s);
-        case 1: return s.costo.length == 2 && _isPure(s);
-        case 2: return s.costo.length == 2 && !_isPure(s);
-        case 3: return s.costo.length == 3 && s.categoria != CategoriaIncantesimo.ultimate;
-        case 4: return s.categoria == CategoriaIncantesimo.ultimate;
-        case 5: return s.costo.length == 2;
-        case 6: return s.costo.length == 3 && s.categoria != CategoriaIncantesimo.ultimate;
-        case 7: return s.costo.length >= 3;
-        default: return true; // Wildcards
-      }
-    }).toList();
+  void _initSlotRules() {
+    _slotRules = [
+      SlotDefinition(id: 0, title: "Slot 1: Base", subtitle: "Tier 1 - Costo 1 [Puro]", filter: (s) => s.costo.length == 1 && _isPure(s)),
+      SlotDefinition(id: 1, title: "Slot 2: Core", subtitle: "Tier 2 - Costo 2 [Puro]", filter: (s) => s.costo.length == 2 && _isPure(s)),
+      SlotDefinition(id: 2, title: "Slot 3: Utility", subtitle: "Tier 1.5 - Costo 1 [P] + 1 [Altro]", filter: (s) => s.costo.length == 2 && !_isPure(s)),
+      SlotDefinition(id: 3, title: "Slot 4: Impatto", subtitle: "Tier 3 - Costo 2 [P] + 1 [Altro]", filter: (s) => s.costo.length == 3 && s.categoria != CategoriaIncantesimo.ultimate),
+      SlotDefinition(id: 4, title: "Slot 5: Finisher", subtitle: "Tier 4 - ULTIMATE (Costo 3+)", filter: (s) => s.categoria == CategoriaIncantesimo.ultimate),
+      SlotDefinition(id: 5, title: "Slot 6: Sinergia", subtitle: "Tier 2 - Ibrido Leggero", filter: (s) => s.costo.length == 2 && !_isPure(s)),
+      SlotDefinition(id: 6, title: "Slot 7: Heavy", subtitle: "Tier 3 - Ibrido Heavy", filter: (s) => s.costo.length == 3 && !_isPure(s) && s.categoria != CategoriaIncantesimo.ultimate),
+      SlotDefinition(id: 7, title: "Slot 8: Tecnica", subtitle: "Tier 4 - Complesso", filter: (s) => s.costo.length >= 3 && !_isPure(s)),
+      SlotDefinition(id: 8, title: "Slot 9: Libero", subtitle: "Qualsiasi", filter: (s) => true),
+      SlotDefinition(id: 9, title: "Slot 10: Libero", subtitle: "Qualsiasi", filter: (s) => true),
+    ];
   }
 
+  bool _isPure(Spell s) => s.costo.every((c) => c == widget.element);
+
   void _openSpellPicker(int slotIndex) {
-    final available = _getAvailableForSlot(slotIndex);
+    final rule = _slotRules[slotIndex];
+    final validSpells = widget.allSpells.where((spell) {
+      if (!rule.filter(spell)) return false;
+      return !_selectedSlots.values.contains(spell) || _selectedSlots[slotIndex] == spell;
+    }).toList();
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.grey.shade900,
-      builder: (context) => Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              "Seleziona per: ${_slotDescriptions[slotIndex]}",
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: _getElementColor(widget.element), borderRadius: const BorderRadius.vertical(top: Radius.circular(20))),
+              child: Row(
+                children: [
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text("Scegli per ${rule.title}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                    Text(rule.subtitle, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  ])),
+                  IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close, color: Colors.white))
+                ],
+              ),
             ),
-          ),
-          Expanded(
-            child: available.isEmpty
-                ? const Center(child: Text("Nessuna magia disponibile per questo slot"))
-                : ListView.builder(
-                    itemCount: available.length,
-                    itemBuilder: (context, i) {
-                      final s = available[i];
-                      return ListTile(
-                        title: Text(s.nome, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(s.descrizione, maxLines: 2, overflow: TextOverflow.ellipsis),
-                        trailing: Text("${s.costo.length} Mana"),
-                        onTap: () {
-                          setState(() => _selectedSlots[slotIndex] = s);
-                          Navigator.pop(context);
-                        },
-                      );
-                    },
-                  ),
-          ),
-        ],
+            Expanded(
+              child: validSpells.isEmpty 
+              ? const Center(child: Text("Nessuna magia disponibile."))
+              : ListView.separated(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: validSpells.length,
+                  separatorBuilder: (c, i) => const SizedBox(height: 12),
+                  itemBuilder: (c, i) {
+                    final spell = validSpells[i];
+                    return ListTile(
+                      title: Text(spell.nome, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text(spell.effetto, maxLines: 2), // Corretto da descrizione a effetto
+                      trailing: Text("${spell.costo.length} Mana"),
+                      onTap: () {
+                        setState(() => _selectedSlots[slotIndex] = spell);
+                        Navigator.pop(ctx);
+                      },
+                    );
+                  },
+                ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    Color themeColor = _getElementColor(widget.element);
+    Color color = _getElementColor(widget.element);
     bool isComplete = _selectedSlots.length == 10;
 
     return Scaffold(
       appBar: AppBar(
         title: Text("Grimorio ${widget.element.name.toUpperCase()}"),
-        backgroundColor: themeColor,
+        backgroundColor: color,
         foregroundColor: Colors.white,
         actions: [
           if (_selectedSlots.isNotEmpty)
@@ -139,80 +135,56 @@ class _SpellSelectionViewState extends State<SpellSelectionView> {
       body: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
-            color: themeColor.withOpacity(0.1),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline, size: 20),
-                const SizedBox(width: 10),
-                Text("Selezionate: ${_selectedSlots.length} / 10"),
-              ],
-            ),
+            padding: const EdgeInsets.all(12), color: color.withOpacity(0.1),
+            child: Row(children: [
+              const Icon(Icons.info_outline),
+              const SizedBox(width: 8),
+              Text("Selezionate: ${_selectedSlots.length}/10"),
+            ]),
           ),
           Expanded(
-            child: ListView.builder(
+            child: ListView.separated(
+              padding: const EdgeInsets.all(16),
               itemCount: 10,
+              separatorBuilder: (c, i) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
-                final spell = _selectedSlots[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  color: spell != null ? themeColor.withOpacity(0.2) : Colors.grey.shade900,
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: themeColor,
-                      child: Text("${index + 1}", style: const TextStyle(color: Colors.white)),
-                    ),
-                    title: Text(
-                      spell?.nome ?? "Slot Vuoto",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: spell != null ? Colors.white : Colors.white38,
-                      ),
-                    ),
-                    subtitle: Text(_slotDescriptions[index]),
-                    trailing: spell != null
-                        ? IconButton(
-                            icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent),
-                            onPressed: () => setState(() => _selectedSlots.remove(index)),
-                          )
-                        : const Icon(Icons.add_circle_outline, color: Colors.white24),
-                    onTap: () => _openSpellPicker(index),
-                  ),
+                final selectedSpell = _selectedSlots[index];
+                return ListTile(
+                  tileColor: selectedSpell != null ? color.withOpacity(0.1) : Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade300)),
+                  title: Text(_slotRules[index].title),
+                  subtitle: Text(selectedSpell?.nome ?? _slotRules[index].subtitle),
+                  trailing: Icon(selectedSpell != null ? Icons.check_circle : Icons.add_circle, color: color),
+                  onTap: () => _openSpellPicker(index),
                 );
               },
             ),
           ),
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isComplete ? themeColor : Colors.grey,
-                ),
-                onPressed: isComplete
-                    ? () {
-                        widget.onConfirm(_selectedSlots.values.toList());
-                        Navigator.pop(context);
-                      }
-                    : null,
-                child: const Text("CONFERMA GRIMORIO", style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ),
+            child: SizedBox(width: double.infinity, height: 50, child: ElevatedButton(
+              onPressed: isComplete ? () { widget.onConfirm(_selectedSlots.values.toList()); Navigator.pop(context); } : null,
+              style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white),
+              child: const Text("CONFERMA GRIMORIO"),
+            )),
+          )
         ],
       ),
     );
   }
 
   Color _getElementColor(Elemento e) {
-    switch (e) {
-      case Elemento.rosso: return Colors.red.shade900;
-      case Elemento.blu: return Colors.blue.shade900;
-      case Elemento.verde: return Colors.green.shade900;
-      case Elemento.giallo: return Colors.orange.shade900;
-      default: return Colors.grey;
-    }
+    if (e == Elemento.rosso) return Colors.red;
+    if (e == Elemento.blu) return Colors.blue;
+    if (e == Elemento.verde) return Colors.green;
+    return Colors.orange;
   }
+}
+
+class SlotDefinition {
+  final int id;
+  final String title;
+  final String subtitle;
+  final bool Function(Spell) filter;
+  SlotDefinition({required this.id, required this.title, required this.subtitle, required this.filter});
 }
