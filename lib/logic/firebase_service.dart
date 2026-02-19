@@ -6,12 +6,10 @@ class FirebaseService {
   String? sessionId;
   String? myUserId;
 
-  // Correzione: accetta ora un sessionId opzionale
   FirebaseService([this.sessionId]) {
     myUserId = "user_${Random().nextInt(99999)}";
   }
 
-  // Correzione: Alias richiesto da GamePage
   Stream<DocumentSnapshot> get gameStream => lobbyStream;
 
   Stream<DocumentSnapshot> get lobbyStream {
@@ -19,8 +17,7 @@ class FirebaseService {
     return _db.collection('sessions').doc(sessionId!).snapshots();
   }
 
-  // --- GESTIONE LOBBY ---
-
+  // --- LOBBY ---
   Future<String> createLobby() async {
     String roomId = "ROOM-${Random().nextInt(9000) + 1000}";
     sessionId = roomId;
@@ -69,6 +66,12 @@ class FirebaseService {
   Future<void> updateSettings(String key, int index) async {
     if (sessionId == null) return;
     await _db.collection('sessions').doc(sessionId!).update({key: index});
+  }
+  
+  // NUOVO: Aggiorna campi nidificati senza sovrascrivere tutto
+  Future<void> updateRoomData(Map<String, dynamic> data) async {
+    if (sessionId == null) return;
+    await _db.collection('sessions').doc(sessionId!).update(data);
   }
 
   Future<void> startGame() async {

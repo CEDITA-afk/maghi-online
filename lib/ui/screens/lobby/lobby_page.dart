@@ -3,11 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../logic/firebase_service.dart';
 import '../../../data/overlord_repository.dart';
 import '../../../data/map_repository.dart';
-import '../../../data/data_repository.dart'; // Aggiunto per caricare le magie
+import '../../../data/data_repository.dart';
 import '../../../models/enums.dart';
 import '../../../models/spell.dart';
 import '../game_page.dart';
-import '../setup/spell_selection_view.dart'; // Aggiunto per personalizzazione
+import '../setup/spell_selection_view.dart';
 
 class LobbyPage extends StatefulWidget {
   final FirebaseService firebase;
@@ -26,8 +26,9 @@ class _LobbyPageState extends State<LobbyPage> {
   
   List<dynamic> _bosses = [];
   List<dynamic> _maps = [];
-  List<Spell> _allSpells = []; // Caricate per i mazzi standard
+  List<Spell> _allSpells = [];
   bool _loading = true;
+  bool _navigating = false; // Previene avvii multipli accidentali
 
   @override
   void initState() {
@@ -39,15 +40,16 @@ class _LobbyPageState extends State<LobbyPage> {
     var b = await _bossRepo.getAvailableOverlords();
     var m = await _mapRepo.getAvailableScenarios();
     var s = await _spellRepo.loadAllSpells();
-    setState(() {
-      _bosses = b;
-      _maps = m;
-      _allSpells = s;
-      _loading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _bosses = b;
+        _maps = m;
+        _allSpells = s;
+        _loading = false;
+      });
+    }
   }
 
-  // Helper per generare mazzi standard di backup
   List<Spell> _generateStandardDeck(Elemento element) {
     List<Spell> deck = [];
     List<Spell> pool = _allSpells.where((s) => s.sourceElement == element).toList();
@@ -68,21 +70,65 @@ class _LobbyPageState extends State<LobbyPage> {
     return deck;
   }
 
-  void _openGrimorio(Elemento e) async {
-    // Carica il mazzo attuale o usa quello standard
-    List<Spell> currentSelection = _generateStandardDeck(e);
+  // Apre il selettore grimori in multiplayer e salva sul cloud
+  void _openGrimorio(Elemento e, Map<String, dynamic> cloudDecks) async {
+    List<Spell> currentSelection = [];
+    if (cloudDecks.containsKey(e.name)) {
+        List<dynamic> ids = cloudDecks[e.name];
+        currentSelection = ids.map((id) => _allSpells.firstWhere((s) => s.id == id, orElse: () => _allSpells.first)).toList();
+    } else {
+        currentSelection = _generateStandardDeck(e);
+    }
 
     await Navigator.push(context, MaterialPageRoute(builder: (_) => SpellSelectionView(
       element: e,
       allSpells: _allSpells.where((s) => s.sourceElement == e).toList(),
       initialSelection: currentSelection,
       onConfirm: (newList) {
-        // Sincronizza il mazzo su Firebase per la stanza
-        widget.firebase.updateFullState({
+        // Salva le carte scelte nel database, specifiche solo per quell'elemento
+        widget.firebase.updateRoomData({
           'decks.${e.name}': newList.map((s) => s.id).toList()
         });
       },
     )));
+  }
+
+  void _startGame(Map<String, dynamic> data) {
+    if (_navigating) return;
+    _navigating = true;
+    try {
+      var map = _maps[data['mapIndex'] ?? 0];
+      var boss = _bosses[data['bossIndex'] ?? 0];
+      Map<String, dynamic> roles = data['roles'] ?? {};
+      Map<String, dynamic> cloudDecks = data['decks'] ?? {};
+      Map<Elemento, List<Spell>> finalDecks = {};
+
+      roles.forEach((roleName, userId) {
+        if (roleName != 'overlord') {
+          Elemento el = Elemento.values.firstWhere((e) => e.name == roleName);
+          if (cloudDecks.containsKey(roleName)) {
+            List<dynamic> ids = cloudDecks[roleName];
+            finalDecks[el] = ids.map((id) => _allSpells.firstWhere((s) => s.id == id, orElse: () => _allSpells.first)).toList();
+          } else {
+            finalDecks[el] = _generateStandardDeck(el);
+          }
+        }
+      });
+
+      // Sicurezza in caso nessuno avesse scelto eroi
+      if (finalDecks.isEmpty) finalDecks[Elemento.rosso] = _generateStandardDeck(Elemento.rosso);
+
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => GamePage(
+        roomId: widget.roomId,
+        mapScenario: map,
+        bossLoadout: boss,
+        numGiocatori: finalDecks.length,
+        playerDecks: finalDecks,
+      )));
+    } catch (e) {
+      debugPrint("Errore avvio partita: $e");
+      _navigating = false;
+    }
   }
 
   @override
@@ -103,29 +149,74 @@ class _LobbyPageState extends State<LobbyPage> {
           }
 
           String myId = widget.firebase.myUserId!;
+          String hostId = data['hostId'] ?? '';
+          bool isHost = myId == hostId;
           Map<String, dynamic> roles = data['roles'] ?? {};
+          Map<String, dynamic> cloudDecks = data['decks'] ?? {};
           List<dynamic> readyPlayers = data['ready'] ?? [];
           bool amIReady = readyPlayers.contains(myId);
 
+          // L'host può startare SOLO se qualcuno è pronto E c'è almeno un Eroe
+          bool canStart = readyPlayers.isNotEmpty && roles.keys.any((k) => k != 'overlord');
+
           return Column(
             children: [
-              // ... (Settings dell'Host invariati)
-
+              Container(
+                padding: const EdgeInsets.all(16),
+                color: Colors.grey.shade800,
+                child: Column(
+                  children: [
+                    Text("Giocatori connessi: ${(data['players'] as List).length}", style: const TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 10),
+                    if (isHost) ...[
+                      _buildDropdown("Mappa", _maps, data['mapIndex'] ?? 0, (v) => widget.firebase.updateSettings('mapIndex', v)),
+                      const SizedBox(height: 10),
+                      _buildDropdown("Boss", _bosses, data['bossIndex'] ?? 0, (v) => widget.firebase.updateSettings('bossIndex', v)),
+                    ] else ...[
+                      Text("Mappa: ${_maps[data['mapIndex'] ?? 0].name}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text("Boss: ${_bosses[data['bossIndex'] ?? 0].nome}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    ]
+                  ],
+                ),
+              ),
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    _buildRoleCard("Overlord", "overlord", Colors.purple, roles, myId, null),
-                    _buildRoleCard("Mago Rosso", "rosso", Colors.red, roles, myId, Elemento.rosso),
-                    _buildRoleCard("Mago Blu", "blu", Colors.blue, roles, myId, Elemento.blu),
-                    _buildRoleCard("Mago Verde", "verde", Colors.green, roles, myId, Elemento.verde),
-                    _buildRoleCard("Mago Giallo", "giallo", Colors.orange, roles, myId, Elemento.giallo),
+                    _buildRoleCard("Overlord", "overlord", Colors.purple, roles, myId, null, cloudDecks),
+                    _buildRoleCard("Mago Rosso", "rosso", Colors.red, roles, myId, Elemento.rosso, cloudDecks),
+                    _buildRoleCard("Mago Blu", "blu", Colors.blue, roles, myId, Elemento.blu, cloudDecks),
+                    _buildRoleCard("Mago Verde", "verde", Colors.green, roles, myId, Elemento.verde, cloudDecks),
+                    _buildRoleCard("Mago Giallo", "giallo", Colors.orange, roles, myId, Elemento.giallo, cloudDecks),
                   ],
                 ),
               ),
-
-              // Barra Ready / Start (Invariata)
-              // ...
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(color: Colors.grey.shade900, border: const Border(top: BorderSide(color: Colors.white10))),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: amIReady ? Colors.green : Colors.grey.shade700,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        onPressed: () => widget.firebase.toggleReady(!amIReady),
+                        child: Text(amIReady ? "SONO PRONTO" : "CLICCA QUANDO PRONTO"),
+                      ),
+                    ),
+                    if (isHost) ...[
+                      const SizedBox(width: 10),
+                      IconButton.filled(
+                        icon: const Icon(Icons.play_arrow),
+                        onPressed: canStart ? () => widget.firebase.startGame() : null, 
+                        style: IconButton.styleFrom(backgroundColor: canStart ? Colors.purpleAccent : Colors.grey),
+                      )
+                    ]
+                  ],
+                ),
+              ),
             ],
           );
         },
@@ -133,7 +224,32 @@ class _LobbyPageState extends State<LobbyPage> {
     );
   }
 
-  Widget _buildRoleCard(String label, String roleId, Color color, Map roles, String myId, Elemento? el) {
+  Widget _buildDropdown(String label, List<dynamic> items, int selectedIdx, Function(int) onChanged) {
+    return Row(
+      children: [
+        Text("$label: ", style: const TextStyle(color: Colors.white70)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: DropdownButton<int>(
+            value: selectedIdx < items.length ? selectedIdx : 0,
+            isExpanded: true,
+            dropdownColor: Colors.grey.shade800,
+            items: List.generate(items.length, (index) => DropdownMenuItem(
+              value: index,
+              child: Text(roleName(items[index])),
+            )),
+            onChanged: (v) => onChanged(v!),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String roleName(dynamic item) {
+    try { return item.name; } catch(e) { return item.nome; }
+  }
+
+  Widget _buildRoleCard(String label, String roleId, Color color, Map roles, String myId, Elemento? el, Map<String, dynamic> cloudDecks) {
     String? ownerId = roles[roleId];
     bool isMine = ownerId == myId;
     bool isTaken = ownerId != null && !isMine;
@@ -145,41 +261,12 @@ class _LobbyPageState extends State<LobbyPage> {
         title: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text(isMine ? "Tuo" : (isTaken ? "Occupato" : "Libero")),
         trailing: isMine && el != null 
-          ? IconButton(icon: const Icon(Icons.auto_stories, color: Colors.white), onPressed: () => _openGrimorio(el))
+          ? IconButton(icon: const Icon(Icons.auto_stories, color: Colors.white), onPressed: () => _openGrimorio(el, cloudDecks))
           : (isTaken ? const Icon(Icons.lock) : null),
         onTap: () {
           if (!isTaken) isMine ? widget.firebase.unclaimRole(roleId) : widget.firebase.claimRole(roleId);
         },
       ),
     );
-  }
-
-  void _startGame(Map<String, dynamic> data) {
-    var map = _maps[data['mapIndex']];
-    var boss = _bosses[data['bossIndex']];
-    Map<String, dynamic> roles = data['roles'] ?? {};
-    Map<String, dynamic> cloudDecks = data['decks'] ?? {};
-    Map<Elemento, List<Spell>> finalDecks = {};
-
-    // Costruisce i mazzi finali (caricati o standard) per ogni eroe in partita
-    roles.forEach((roleName, userId) {
-      if (roleName != 'overlord') {
-        Elemento el = Elemento.values.firstWhere((e) => e.name == roleName);
-        if (cloudDecks.containsKey(roleName)) {
-          List<dynamic> ids = cloudDecks[roleName];
-          finalDecks[el] = ids.map((id) => _allSpells.firstWhere((s) => s.id == id)).toList();
-        } else {
-          finalDecks[el] = _generateStandardDeck(el);
-        }
-      }
-    });
-
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => GamePage(
-      roomId: widget.roomId,
-      mapScenario: map,
-      bossLoadout: boss,
-      numGiocatori: finalDecks.length,
-      playerDecks: finalDecks,
-    )));
   }
 }
