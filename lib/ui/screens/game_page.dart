@@ -25,7 +25,6 @@ class GamePage extends StatefulWidget {
   final MapScenario mapScenario;
   final String roomId;
   
-  // Parametri di controllo permessi Multiplayer
   final String? myUserId;
   final Map<String, dynamic> roles;
 
@@ -68,7 +67,6 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
   List<ManaDice> _hand = [];
   final Set<int> _selectedDiceIndices = {};
 
-  // --- LOGICA PERMESSI ---
   bool get isHotseat => widget.myUserId == null;
   
   bool canControl(String roleName) {
@@ -86,10 +84,9 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
     _initGame();
     _initDefaultPositions();
     
-    // TabController ora ha +1 di lunghezza per l'Overlord
     _tabController = TabController(length: _activeElements.length + 1, vsync: this);
     _tabController.addListener(() {
-      if (_tabController.indexIsChanging) setState(() {}); // Forza l'aggiornamento della View
+      if (_tabController.indexIsChanging) setState(() {}); 
     });
     
     _mainViewTabController = TabController(length: 2, vsync: this);
@@ -131,7 +128,7 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
       'acted_heroes': _actedHeroes.map((e) => e.name).toList(),
       'is_overlord_phase': _isOverlordPhase,
       'hand': _hand.map((d) => {'id': d.id, 'source': d.sourceColor.name, 'effective': d.effectiveElement.name, 'val': d.faceValue}).toList(),
-      'selected_dice': _selectedDiceIndices.toList(), // Sincronizza i dadi selezionati!
+      'selected_dice': _selectedDiceIndices.toList(),
     }, SetOptions(merge: true));
   }
 
@@ -140,7 +137,6 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
     _firebase.updatePosition(id, x, y);
   }
 
-  // .. (Codice Spawn Minion e Dialog invariati)
   void _spawnMinionFromMap(Minion template) {
     setState(() {
       _minionCounter++;
@@ -245,7 +241,7 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
       if (_activeHero != null) _actedHeroes.add(_activeHero!);
       _activeHero = null;
       _isOverlordPhase = true;
-      _tabController.animateTo(_activeElements.length); // Autoscroll al tab Overlord
+      _tabController.animateTo(_activeElements.length); // Sposta la visuale sull'Overlord
       _pushFullState();
     }
   }
@@ -254,10 +250,11 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
     setState(() {
       if (_actedHeroes.length == _activeElements.length) {
         for (int i = 0; i < widget.bossLoadout.getRendita(widget.numGiocatori); i++) _boss.riceviMana(Elemento.jolly);
-        _actedHeroes.clear();
+        _actedHeroes.clear(); // Resetta il round, tutti possono agire di nuovo
       }
       _isOverlordPhase = false;
-      _tabController.animateTo(0); // Ritorna al primo Mago
+      // RIMOSSO l'autoscroll obbligatorio verso il Mago 0.
+      // Ora i giocatori restano dove sono e possono cliccare liberamente il Mago che desiderano.
       _pushFullState();
     });
   }
@@ -296,12 +293,21 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
           if (data['acted_heroes'] != null) _actedHeroes = (data['acted_heroes'] as List).map((n) => Elemento.values.firstWhere((e) => e.name == n)).toList();
         }
 
-        List<Widget> tabWidgets = _activeElements.map((e) => Tab(icon: Icon(_getIcon(e)))).toList();
-        tabWidgets.add(const Tab(icon: Icon(Icons.security, color: Colors.purpleAccent))); // Tab Overlord
+        // TABS: Feedback visivo per i maghi che hanno già agito
+        List<Widget> tabWidgets = _activeElements.map((e) {
+          bool hasActed = _actedHeroes.contains(e);
+          return Tab(
+            icon: Icon(
+              hasActed ? Icons.check_circle : _getIcon(e),
+              color: hasActed ? Colors.white30 : _getElementColor(e),
+            ),
+          );
+        }).toList();
+        tabWidgets.add(const Tab(icon: Icon(Icons.security, color: Colors.purpleAccent))); 
 
         return Scaffold(
           appBar: AppBar(
-            title: Text("Stanza: ${widget.roomId}"),
+            title: Text("PIN: ${widget.roomId}"),
             backgroundColor: Colors.grey.shade900,
             actions: [
               IconButton(icon: const Icon(Icons.table_bar), onPressed: () => _mainViewTabController.animateTo(0)),
@@ -339,7 +345,7 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
               onEndTurn: () => setState(() { _actions = 0; _checkEndTurn(); }),
             ),
           ),
-        Expanded(child: _buildMainArea()), // Gestisce internamente Mago vs Overlord
+        Expanded(child: _buildMainArea()),
         if (_activeHero != null) ...[
           IgnorePointer(
             ignoring: !canInteractMage(_activeHero!),
@@ -377,10 +383,10 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
     int tabIndex = _tabController.index;
     bool isOverlordTab = tabIndex == _activeElements.length;
 
-    // SCENARIO 1: TAB DELL'OVERLORD
+    // 1. OVERLORD VIEW
     if (isOverlordTab) {
       return AbsorbPointer(
-        absorbing: !canInteractOverlord(), // Disabilita click se non sei tu o non è il tuo turno
+        absorbing: !canInteractOverlord(),
         child: OverlordView(
           boss: _boss,
           abilitaBoss: widget.bossLoadout.abilitaSelezionate,
@@ -392,7 +398,7 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
       );
     }
 
-    // SCENARIO 2: TAB DI UN MAGO
+    // 2. MAGE VIEW
     Elemento currentMage = _activeElements[tabIndex];
 
     if (_isOverlordPhase) {
@@ -416,9 +422,9 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
       return Center(child: Text("Turno di ${_activeHero!.name.toUpperCase()} in corso...", style: const TextStyle(fontSize: 18)));
     }
 
-    // Se non c'è turno attivo, mostra il pulsante Start se l'eroe non ha agito
+    // Qui il giocatore può SCEGLIERE liberamente quale Mago far agire (se non ha già agito)
     bool hasActed = _actedHeroes.contains(currentMage);
-    if (hasActed) return const Center(child: Text("Questo eroe ha già agito nel round attuale."));
+    if (hasActed) return const Center(child: Text("Questo Eroe ha già agito in questo round. Seleziona un altro Eroe."));
 
     return Center(
       child: ElevatedButton.icon(
