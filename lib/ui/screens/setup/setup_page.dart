@@ -278,25 +278,32 @@ class _SetupPageState extends State<SetupPage> {
 
   Widget _buildDeckCard(Elemento e) {
     bool hasDeck = _heroDecks.containsKey(e);
-    bool isComplete = hasDeck && _heroDecks[e]!.length == 10;
-    
     return Card(
-      color: hasDeck 
-          ? (isComplete ? _getElementColor(e) : _getElementColor(e).withOpacity(0.5)) 
-          : Colors.grey.shade800,
-      elevation: hasDeck ? 4 : 1,
-      child: InkWell(
-        onTap: () => _openDeckBuilder(e),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(isComplete ? Icons.check_circle : Icons.edit, color: hasDeck ? Colors.white : Colors.grey, size: 32),
-              Text(e.name.toUpperCase(), style: TextStyle(color: hasDeck ? Colors.white : Colors.white70, fontWeight: FontWeight.bold)),
-              Text(isComplete ? "Mazzo Pronto" : "Personalizza", style: TextStyle(color: hasDeck ? Colors.white70 : Colors.grey)),
-            ],
+      color: hasDeck ? _getElementColor(e) : Colors.black38,
+      child: Stack(
+        children: [
+          InkWell(
+            onTap: () => _openDeckBuilder(e),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(hasDeck ? Icons.check : Icons.add, color: Colors.white),
+                  Text(e.name.toUpperCase()),
+                ],
+              ),
+            ),
           ),
-        ),
+        // PULSANTE PER DESELEZIONARE
+          if (hasDeck)
+            Positioned(
+              top: 0, right: 0,
+              child: IconButton(
+                icon: const Icon(Icons.close, size: 18, color: Colors.white70),
+                onPressed: () => setState(() => _heroDecks.remove(e)),
+              ),
+            ),
+        ],
       ),
     );
   }

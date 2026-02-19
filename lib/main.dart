@@ -33,7 +33,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.purple,
         useMaterial3: true,
       ),
-      home: const SetupPage(),
+      home: const MainMenuPage(),
     );
   }
 }

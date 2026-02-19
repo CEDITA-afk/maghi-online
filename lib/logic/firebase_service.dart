@@ -6,14 +6,12 @@ class FirebaseService {
   String? sessionId;
   String? myUserId;
 
-  // Modificato: Accetta ora un sessionId opzionale
+  // Accetta il sessionId opzionale per risolvere l'errore di compilazione
   FirebaseService([this.sessionId]) {
     myUserId = "user_${Random().nextInt(99999)}";
   }
 
-  // --- STREAM IN TEMPO REALE ---
-
-  // Aggiunto: Alias gameStream per compatibilità con GamePage
+  // Alias per gameStream richiesto da GamePage
   Stream<DocumentSnapshot> get gameStream => lobbyStream;
 
   Stream<DocumentSnapshot> get lobbyStream {
@@ -21,21 +19,19 @@ class FirebaseService {
     return _db.collection('sessions').doc(sessionId!).snapshots();
   }
 
-  // --- GESTIONE LOBBY ---
+  // --- LOGICA LOBBY ---
 
   Future<String> createLobby() async {
     String roomId = "ROOM-${Random().nextInt(9000) + 1000}";
     sessionId = roomId;
-    
     await _db.collection('sessions').doc(roomId).set({
-      'created_at': FieldValue.serverTimestamp(),
       'status': 'LOBBY',
       'hostId': myUserId,
       'players': [myUserId],
-      'roles': {},      
-      'ready': [],      
-      'mapIndex': 0,    
-      'bossIndex': 0,   
+      'roles': {}, 
+      'ready': [],
+      'mapIndex': 0,
+      'bossIndex': 0,
     });
     return roomId;
   }
@@ -43,7 +39,6 @@ class FirebaseService {
   Future<bool> joinLobby(String roomId) async {
     DocumentSnapshot doc = await _db.collection('sessions').doc(roomId).get();
     if (!doc.exists) return false;
-    
     sessionId = roomId;
     await _db.collection('sessions').doc(roomId).update({
       'players': FieldValue.arrayUnion([myUserId])
@@ -53,29 +48,19 @@ class FirebaseService {
 
   Future<void> claimRole(String role) async {
     if (sessionId == null) return;
-    await _db.collection('sessions').doc(sessionId!).update({
-      'roles.$role': myUserId
-    });
+    await _db.collection('sessions').doc(sessionId!).update({'roles.$role': myUserId});
   }
 
   Future<void> unclaimRole(String role) async {
     if (sessionId == null) return;
-    await _db.collection('sessions').doc(sessionId!).update({
-      'roles.$role': FieldValue.delete()
-    });
+    await _db.collection('sessions').doc(sessionId!).update({'roles.$role': FieldValue.delete()});
   }
 
   Future<void> toggleReady(bool isReady) async {
     if (sessionId == null) return;
-    if (isReady) {
-      await _db.collection('sessions').doc(sessionId!).update({
-        'ready': FieldValue.arrayUnion([myUserId])
-      });
-    } else {
-      await _db.collection('sessions').doc(sessionId!).update({
-        'ready': FieldValue.arrayRemove([myUserId])
-      });
-    }
+    await _db.collection('sessions').doc(sessionId!).update({
+      'ready': isReady ? FieldValue.arrayUnion([myUserId]) : FieldValue.arrayRemove([myUserId])
+    });
   }
 
   Future<void> updateSettings(String key, int index) async {
@@ -85,19 +70,14 @@ class FirebaseService {
 
   Future<void> startGame() async {
     if (sessionId == null) return;
-    await _db.collection('sessions').doc(sessionId!).update({
-      'status': 'PLAYING'
-    });
+    await _db.collection('sessions').doc(sessionId!).update({'status': 'PLAYING'});
   }
 
-  // --- GESTIONE GAMEPLAY ---
-
+  // --- LOGICA GIOCO ---
   Future<void> updatePosition(String id, int x, int y) async {
     if (sessionId == null) return;
     await _db.collection('sessions').doc(sessionId!).set({
-      'positions': {
-        id: {'x': x, 'y': y}
-      }
+      'positions': { id: {'x': x, 'y': y} }
     }, SetOptions(merge: true));
   }
 
