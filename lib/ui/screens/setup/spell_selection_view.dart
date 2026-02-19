@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../models/spell.dart';
 import '../../../models/enums.dart';
-import '../../widgets/spell_card.dart';
 
 class SpellSelectionView extends StatefulWidget {
   final Elemento element;
@@ -97,7 +96,7 @@ class _SpellSelectionViewState extends State<SpellSelectionView> {
                     final spell = validSpells[i];
                     return ListTile(
                       title: Text(spell.nome, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text(spell.effetto, maxLines: 2), // Corretto da descrizione a effetto
+                      subtitle: Text(spell.effetto, maxLines: 2), // Utilizza 'effetto' come definito nel modello Spell
                       trailing: Text("${spell.costo.length} Mana"),
                       onTap: () {
                         setState(() => _selectedSlots[slotIndex] = spell);
@@ -151,7 +150,11 @@ class _SpellSelectionViewState extends State<SpellSelectionView> {
                 final selectedSpell = _selectedSlots[index];
                 return ListTile(
                   tileColor: selectedSpell != null ? color.withOpacity(0.1) : Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade300)),
+                  // Corretto: 'side' con 'BorderSide' invece di 'border' con 'Border.all'
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12), 
+                    side: BorderSide(color: Colors.grey.shade300),
+                  ),
                   title: Text(_slotRules[index].title),
                   subtitle: Text(selectedSpell?.nome ?? _slotRules[index].subtitle),
                   trailing: Icon(selectedSpell != null ? Icons.check_circle : Icons.add_circle, color: color),
