@@ -6,12 +6,12 @@ class FirebaseService {
   String? sessionId;
   String? myUserId;
 
-  // Accetta il sessionId opzionale per risolvere l'errore di compilazione
+  // Correzione: accetta ora un sessionId opzionale
   FirebaseService([this.sessionId]) {
     myUserId = "user_${Random().nextInt(99999)}";
   }
 
-  // Alias per gameStream richiesto da GamePage
+  // Correzione: Alias richiesto da GamePage
   Stream<DocumentSnapshot> get gameStream => lobbyStream;
 
   Stream<DocumentSnapshot> get lobbyStream {
@@ -19,16 +19,18 @@ class FirebaseService {
     return _db.collection('sessions').doc(sessionId!).snapshots();
   }
 
-  // --- LOGICA LOBBY ---
+  // --- GESTIONE LOBBY ---
 
   Future<String> createLobby() async {
     String roomId = "ROOM-${Random().nextInt(9000) + 1000}";
     sessionId = roomId;
+    
     await _db.collection('sessions').doc(roomId).set({
+      'created_at': FieldValue.serverTimestamp(),
       'status': 'LOBBY',
       'hostId': myUserId,
       'players': [myUserId],
-      'roles': {}, 
+      'roles': {},
       'ready': [],
       'mapIndex': 0,
       'bossIndex': 0,
@@ -39,6 +41,7 @@ class FirebaseService {
   Future<bool> joinLobby(String roomId) async {
     DocumentSnapshot doc = await _db.collection('sessions').doc(roomId).get();
     if (!doc.exists) return false;
+    
     sessionId = roomId;
     await _db.collection('sessions').doc(roomId).update({
       'players': FieldValue.arrayUnion([myUserId])
@@ -73,7 +76,7 @@ class FirebaseService {
     await _db.collection('sessions').doc(sessionId!).update({'status': 'PLAYING'});
   }
 
-  // --- LOGICA GIOCO ---
+  // --- GAMEPLAY ---
   Future<void> updatePosition(String id, int x, int y) async {
     if (sessionId == null) return;
     await _db.collection('sessions').doc(sessionId!).set({

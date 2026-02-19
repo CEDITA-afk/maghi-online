@@ -21,25 +21,25 @@ class _SetupPageState extends State<SetupPage> {
   final OverlordRepository _overlordRepo = OverlordRepository();
   final MapRepository _mapRepo = MapRepository();
 
-  // Dati di caricamento
+  // Dati caricati dai repository
   List<OverlordLoadout> _availableOverlords = [];
   List<Spell> _allSpells = [];
   List<MapScenario> _availableMaps = [];
   bool _isLoading = true;
 
   // Stato del Setup
-  int _step = 1; // 1: Boss & Online, 2: Eroi, 3: Abilità Boss, 4: Mappa
+  int _step = 1; // 1: Boss e Giocatori, 2: Eroi, 3: Abilità Boss, 4: Mappa
   int _playerCount = 3;
   OverlordLoadout? _selectedOverlord;
   MapScenario? _selectedMap;
   
-  // Controller per l'ID Stanza Online
-  final TextEditingController _roomController = TextEditingController(text: "TAVOLO_1");
+  // Controller per ID Stanza (usato se si vuole sincronizzare anche in Test)
+  final TextEditingController _roomController = TextEditingController(text: "HOTSEAT_TEST");
   
-  // Grimori Eroi
+  // Grimori selezionati
   final Map<Elemento, List<Spell>> _heroDecks = {};
   
-  // Abilità Boss Selezionate (Pools)
+  // Abilità Boss selezionate
   final Set<OverlordAbility> _selFast = {};
   final Set<OverlordAbility> _selMedium = {};
   final Set<OverlordAbility> _selUltimate = {};
@@ -49,12 +49,6 @@ class _SetupPageState extends State<SetupPage> {
   void initState() {
     super.initState();
     _loadData();
-  }
-
-  @override
-  void dispose() {
-    _roomController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -70,41 +64,38 @@ class _SetupPageState extends State<SetupPage> {
       if (bosses.isNotEmpty) _selectedOverlord = bosses.first;
       if (maps.isNotEmpty) _selectedMap = maps.first;
 
-      // Generazione automatica dei mazzi standard per tutti gli elementi
-      _heroDecks[Elemento.rosso] = _generateStandardDeck(Elemento.rosso, spells);
-      _heroDecks[Elemento.blu] = _generateStandardDeck(Elemento.blu, spells);
-      _heroDecks[Elemento.verde] = _generateStandardDeck(Elemento.verde, spells);
-      _heroDecks[Elemento.giallo] = _generateStandardDeck(Elemento.giallo, spells);
+      // Inizializza i mazzi standard in base al numero di giocatori iniziale (3)
+      _updateDefaultDecks(spells);
 
       _isLoading = false;
     });
   }
 
+  // Genera i mazzi standard per gli elementi scelti
+  void _updateDefaultDecks(List<Spell> spells) {
+    _heroDecks.clear();
+    List<Elemento> elements = [Elemento.rosso, Elemento.blu, Elemento.verde, Elemento.giallo];
+    for (int i = 0; i < _playerCount; i++) {
+      _heroDecks[elements[i]] = _generateStandardDeck(elements[i], spells);
+    }
+  }
+
   List<Spell> _generateStandardDeck(Elemento element, List<Spell> allSpells) {
     List<Spell> deck = [];
-    List<Spell> available = allSpells.where((s) => s.sourceElement == element).toList();
+    List<Spell> pool = allSpells.where((s) => s.sourceElement == element).toList();
 
     bool isPure(Spell s) => s.costo.every((c) => c == element);
     
-    // Slot 1: Base (Costo 1 Puro)
-    _addSlot(deck, available, (s) => s.costo.length == 1 && isPure(s));
-    // Slot 2: Core (Costo 2 Puro)
-    _addSlot(deck, available, (s) => s.costo.length == 2 && isPure(s));
-    // Slot 3: Utility (Costo 2 Ibrido)
-    _addSlot(deck, available, (s) => s.costo.length == 2 && !isPure(s));
-    // Slot 4: Impatto (Costo 3 No Ult)
-    _addSlot(deck, available, (s) => s.costo.length == 3 && s.categoria != CategoriaIncantesimo.ultimate);
-    // Slot 5: Ultimate
-    _addSlot(deck, available, (s) => s.categoria == CategoriaIncantesimo.ultimate);
-    // Slot 6: Sinergia
-    _addSlot(deck, available, (s) => s.costo.length == 2);
-    // Slot 7: Heavy
-    _addSlot(deck, available, (s) => s.costo.length == 3 && s.categoria != CategoriaIncantesimo.ultimate);
-    // Slot 8: Tecnica
-    _addSlot(deck, available, (s) => s.costo.length >= 3);
-    // Slot 9 & 10: Wildcards
-    _addSlot(deck, available, (s) => true);
-    _addSlot(deck, available, (s) => true);
+    _addSlot(deck, pool, (s) => s.costo.length == 1 && isPure(s));
+    _addSlot(deck, pool, (s) => s.costo.length == 2 && isPure(s));
+    _addSlot(deck, pool, (s) => s.costo.length == 2 && !isPure(s));
+    _addSlot(deck, pool, (s) => s.costo.length == 3 && s.categoria != CategoriaIncantesimo.ultimate);
+    _addSlot(deck, pool, (s) => s.categoria == CategoriaIncantesimo.ultimate);
+    _addSlot(deck, pool, (s) => s.costo.length == 2);
+    _addSlot(deck, pool, (s) => s.costo.length == 3);
+    _addSlot(deck, pool, (s) => s.costo.length >= 3);
+    _addSlot(deck, pool, (s) => true);
+    _addSlot(deck, pool, (s) => true);
 
     return deck;
   }
@@ -113,31 +104,22 @@ class _SetupPageState extends State<SetupPage> {
     try {
       Spell match = pool.firstWhere((s) => filter(s) && !deck.contains(s));
       deck.add(match);
-    } catch (e) { /* Slot lasciato vuoto se non ci sono match */ }
+    } catch (e) {}
   }
 
-  void _nextStep() => setState(() => _step++);
-  void _prevStep() => setState(() => _step--);
-
   void _startGame() {
-    List<OverlordAbility> finalAbilities = [
-      ..._selFast,
-      ..._selMedium,
-      ..._selUltimate,
-      ..._selChaos
-    ];
-
+    List<OverlordAbility> finalAbilities = [..._selFast, ..._selMedium, ..._selUltimate, ..._selChaos];
     final finalLoadout = _selectedOverlord!.copyWithSelection(finalAbilities);
 
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (context) => GamePage(
-          numGiocatori: _playerCount,
+          numGiocatori: _heroDecks.length,
           playerDecks: _heroDecks,
           bossLoadout: finalLoadout,
           mapScenario: _selectedMap!,
-          roomId: _roomController.text.trim().isEmpty ? "ROOM_TEST" : _roomController.text.trim(),
+          roomId: _roomController.text.trim(),
         ),
       ),
     );
@@ -149,19 +131,13 @@ class _SetupPageState extends State<SetupPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("Setup Partita Online - Fase $_step/4"),
+        title: Text("Setup Modalità Test - Fase $_step/4"),
         backgroundColor: Colors.grey.shade900,
-        foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
-          LinearProgressIndicator(value: _step / 4, color: Colors.purpleAccent, backgroundColor: Colors.grey.shade800),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: _buildCurrentStep(),
-            ),
-          ),
+          LinearProgressIndicator(value: _step / 4, color: Colors.purpleAccent),
+          Expanded(child: Padding(padding: const EdgeInsets.all(16.0), child: _buildCurrentStep())),
           _buildBottomBar(),
         ],
       ),
@@ -170,94 +146,52 @@ class _SetupPageState extends State<SetupPage> {
 
   Widget _buildCurrentStep() {
     switch (_step) {
-      case 1: return _buildStep1_BossAndRoom();
-      case 2: return _buildStep2_HeroDecks();
-      case 3: return _buildStep3_BossLoadout();
-      case 4: return _buildStep4_MapSelection();
+      case 1: return _buildStep1();
+      case 2: return _buildStep2();
+      case 3: return _buildStep3();
+      case 4: return _buildStep4();
       default: return Container();
     }
   }
 
-  // --- STEP 1: BOSS, GIOCATORI & STANZA ONLINE ---
-  Widget _buildStep1_BossAndRoom() {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("1. STANZA ONLINE", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.purpleAccent)),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _roomController,
-            decoration: const InputDecoration(
-              labelText: "ID Stanza (Condividilo per giocare insieme)",
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.vpn_key),
-            ),
-          ),
-          const SizedBox(height: 30),
-          const Text("2. SELEZIONA OVERLORD", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<OverlordLoadout>(
-            value: _selectedOverlord,
-            items: _availableOverlords.map((b) => DropdownMenuItem(value: b, child: Text(b.nome))).toList(),
-            onChanged: (v) => setState(() {
-               _selectedOverlord = v;
-               _selFast.clear(); _selMedium.clear(); _selUltimate.clear(); _selChaos.clear();
-            }),
-            decoration: const InputDecoration(border: OutlineInputBorder()),
-          ),
-          if (_selectedOverlord != null) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.grey.shade900, borderRadius: BorderRadius.circular(8)),
-              child: Text(_selectedOverlord!.descrizione, style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.white70)),
-            ),
+  // --- STEP 1: BOSS & NUMERO GIOCATORI ---
+  Widget _buildStep1() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("1. SELEZIONA OVERLORD", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<OverlordLoadout>(
+          value: _selectedOverlord,
+          items: _availableOverlords.map((b) => DropdownMenuItem(value: b, child: Text(b.nome))).toList(),
+          onChanged: (v) => setState(() => _selectedOverlord = v),
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 30),
+        const Text("2. NUMERO EROI", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        SegmentedButton<int>(
+          segments: const [
+            ButtonSegment(value: 1, label: Text("1")),
+            ButtonSegment(value: 2, label: Text("2")),
+            ButtonSegment(value: 3, label: Text("3")),
+            ButtonSegment(value: 4, label: Text("4")),
           ],
-          const SizedBox(height: 30),
-          const Text("3. NUMERO EROI", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          SegmentedButton<int>(
-            segments: const [
-              ButtonSegment(value: 2, label: Text("2 Eroi")),
-              ButtonSegment(value: 3, label: Text("3 Eroi")),
-              ButtonSegment(value: 4, label: Text("4 Eroi")),
-            ],
-            selected: {_playerCount},
-            onSelectionChanged: (s) => setState(() => _playerCount = s.first),
-          ),
-        ],
-      ),
+          selected: {_playerCount},
+          onSelectionChanged: (s) => setState(() {
+            _playerCount = s.first;
+            _updateDefaultDecks(_allSpells);
+          }),
+        ),
+      ],
     );
   }
 
-  // --- STEP 2: GRIMORI ---
-  Widget _buildStep2_HeroDecks() {
-    int readyCount = _heroDecks.values.where((l) => l.length == 10).length;
-    bool isCountCorrect = readyCount >= _playerCount;
-
+  // --- STEP 2: GRIMORI (CON CORREZIONE DESELEZIONE) ---
+  Widget _buildStep2() {
     return Column(
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text("GRIMORI (Standard Caricati)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: isCountCorrect ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: isCountCorrect ? Colors.green : Colors.red),
-              ),
-              child: Text(
-                "Pronti: $readyCount / $_playerCount",
-                style: TextStyle(fontWeight: FontWeight.bold, color: isCountCorrect ? Colors.green : Colors.red),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        const Text("I mazzi sono pre-configurati. Modificali se necessario.", style: TextStyle(color: Colors.grey, fontSize: 12)),
+        Text("CONFIGURA GRIMORI (${_heroDecks.length} / $_playerCount)", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 20),
         Expanded(
           child: GridView.count(
@@ -278,28 +212,42 @@ class _SetupPageState extends State<SetupPage> {
 
   Widget _buildDeckCard(Elemento e) {
     bool hasDeck = _heroDecks.containsKey(e);
+    
     return Card(
-      color: hasDeck ? _getElementColor(e) : Colors.black38,
+      color: hasDeck ? _getElementColor(e) : Colors.grey.shade900,
       child: Stack(
         children: [
           InkWell(
-            onTap: () => _openDeckBuilder(e),
+            onTap: () {
+              if (!hasDeck) {
+                setState(() => _heroDecks[e] = _generateStandardDeck(e, _allSpells));
+              } else {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => SpellSelectionView(
+                  element: e,
+                  allSpells: _allSpells.where((s) => s.sourceElement == e).toList(),
+                  initialSelection: _heroDecks[e]!,
+                  onConfirm: (list) => setState(() => _heroDecks[e] = list),
+                )));
+              }
+            },
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(hasDeck ? Icons.check : Icons.add, color: Colors.white),
-                  Text(e.name.toUpperCase()),
+                  Icon(hasDeck ? Icons.auto_stories : Icons.add, color: Colors.white, size: 30),
+                  const SizedBox(height: 5),
+                  Text(e.name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(hasDeck ? "Mazzo Pronto" : "Clicca per attivare", style: const TextStyle(fontSize: 10)),
                 ],
               ),
             ),
           ),
-        // PULSANTE PER DESELEZIONARE
+          // IL TASTO "X" PER DESELEZIONARE
           if (hasDeck)
             Positioned(
               top: 0, right: 0,
               child: IconButton(
-                icon: const Icon(Icons.close, size: 18, color: Colors.white70),
+                icon: const Icon(Icons.cancel, color: Colors.white70, size: 20),
                 onPressed: () => setState(() => _heroDecks.remove(e)),
               ),
             ),
@@ -308,153 +256,72 @@ class _SetupPageState extends State<SetupPage> {
     );
   }
 
-  void _openDeckBuilder(Elemento e) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => SpellSelectionView(
-      element: e,
-      allSpells: _allSpells.where((s) => s.sourceElement == e).toList(),
-      initialSelection: _heroDecks[e] ?? [],
-      onConfirm: (list) => setState(() => _heroDecks[e] = list),
-    )));
-  }
-
   // --- STEP 3: ABILITÀ BOSS ---
-  Widget _buildStep3_BossLoadout() {
-    if (_selectedOverlord == null) return const Center(child: Text("Seleziona un boss nella fase 1"));
-
+  Widget _buildStep3() {
     return SingleChildScrollView(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("PERSONALIZZA ${_selectedOverlord!.nome.toUpperCase()}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
           _buildPoolSection("RAPIDE (2)", _selectedOverlord!.poolFast, _selFast, 2),
           _buildPoolSection("MEDIE (2)", _selectedOverlord!.poolMedium, _selMedium, 2),
           _buildPoolSection("ULTIMATE (1)", _selectedOverlord!.poolUltimate, _selUltimate, 1),
-          _buildPoolSection("POTERI DEL CAOS (3)", _selectedOverlord!.poolChaos, _selChaos, 3),
+          _buildPoolSection("CAOS (3)", _selectedOverlord!.poolChaos, _selChaos, 3),
         ],
       ),
     );
   }
 
-  Widget _buildPoolSection(String title, List<OverlordAbility> pool, Set<OverlordAbility> selectedSet, int max) {
-    bool isComplete = selectedSet.length == max;
+  Widget _buildPoolSection(String title, List<OverlordAbility> pool, Set<OverlordAbility> sel, int max) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: isComplete ? Colors.greenAccent : Colors.white)),
-            Text("${selectedSet.length}/$max", style: TextStyle(fontWeight: FontWeight.bold, color: selectedSet.length > max ? Colors.red : Colors.grey)),
-          ],
-        ),
-        const Divider(color: Colors.white10),
-        ...pool.map((skill) {
-          bool isSelected = selectedSet.contains(skill);
-          return CheckboxListTile(
-            title: Text(skill.nome, style: const TextStyle(fontSize: 14)),
-            subtitle: Text(skill.effetto, style: const TextStyle(fontSize: 12, color: Colors.white60)),
-            value: isSelected,
-            activeColor: Colors.purpleAccent,
-            onChanged: (val) {
-              setState(() {
-                if (val == true) {
-                  if (selectedSet.length < max) selectedSet.add(skill);
-                } else {
-                  selectedSet.remove(skill);
-                }
-              });
-            },
-          );
-        }),
+        Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Text("$title - ${sel.length}/$max", style: const TextStyle(fontWeight: FontWeight.bold))),
+        ...pool.map((a) => CheckboxListTile(
+          title: Text(a.nome),
+          value: sel.contains(a),
+          onChanged: (v) => setState(() {
+            if (v!) { if (sel.length < max) sel.add(a); } else { sel.remove(a); }
+          }),
+        )),
       ],
     );
   }
 
-  // --- STEP 4: SELEZIONE MAPPA ---
-  Widget _buildStep4_MapSelection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("4. SCEGLI IL CAMPO DI BATTAGLIA", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 10),
-        Expanded(
-          child: ListView.builder(
-            itemCount: _availableMaps.length,
-            itemBuilder: (context, index) {
-              final map = _availableMaps[index];
-              bool isSelected = _selectedMap == map;
-              return Card(
-                color: isSelected ? Colors.purple.withOpacity(0.2) : Colors.grey.shade900,
-                shape: RoundedRectangleBorder(
-                  side: BorderSide(color: isSelected ? Colors.purpleAccent : Colors.transparent, width: 2),
-                  borderRadius: BorderRadius.circular(12)
-                ),
-                margin: const EdgeInsets.symmetric(vertical: 6),
-                child: ListTile(
-                  leading: ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: Container(
-                      width: 50, height: 50,
-                      color: Colors.black,
-                      child: map.backgroundAsset.isNotEmpty 
-                        ? Image.asset(map.backgroundAsset, fit: BoxFit.cover,
-                            errorBuilder: (c, e, s) => const Icon(Icons.map, color: Colors.grey))
-                        : const Icon(Icons.map, color: Colors.grey),
-                    ),
-                  ),
-                  title: Text(map.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(map.description, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.purpleAccent) : null,
-                  onTap: () => setState(() => _selectedMap = map),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+  // --- STEP 4: MAPPA ---
+  Widget _buildStep4() {
+    return ListView.builder(
+      itemCount: _availableMaps.length,
+      itemBuilder: (context, i) => ListTile(
+        title: Text(_availableMaps[i].name),
+        trailing: _selectedMap == _availableMaps[i] ? const Icon(Icons.check_circle, color: Colors.purpleAccent) : null,
+        onTap: () => setState(() => _selectedMap = _availableMaps[i]),
+      ),
     );
   }
 
   Widget _buildBottomBar() {
     bool canProceed = false;
-    if (_step == 1) canProceed = _selectedOverlord != null && _roomController.text.isNotEmpty;
-    if (_step == 2) {
-      int readyCount = _heroDecks.values.where((l) => l.length == 10).length;
-      canProceed = readyCount >= _playerCount;
-    }
-    if (_step == 3) {
-      canProceed = _selFast.length == 2 && _selMedium.length == 2 && 
-                   _selUltimate.length == 1 && _selChaos.length == 3;
-    }
+    if (_step == 1) canProceed = true;
+    if (_step == 2) canProceed = _heroDecks.length == _playerCount;
+    if (_step == 3) canProceed = _selFast.length == 2 && _selMedium.length == 2 && _selUltimate.length == 1;
     if (_step == 4) canProceed = _selectedMap != null;
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.grey.shade900, border: const Border(top: BorderSide(color: Colors.white10))),
+      color: Colors.grey.shade900,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          if (_step > 1) 
-            OutlinedButton(onPressed: _prevStep, child: const Text("INDIETRO"))
-          else 
-            const SizedBox(),
-          
+          if (_step > 1) TextButton(onPressed: () => setState(() => _step--), child: const Text("INDIETRO")),
+          const Spacer(),
           ElevatedButton(
-            onPressed: canProceed ? (_step == 4 ? _startGame : _nextStep) : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: canProceed ? Colors.purpleAccent : Colors.grey.shade800, 
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12)
-            ),
-            child: Text(_step == 4 ? "INIZIA BATTAGLIA" : "AVANTI"),
+            onPressed: canProceed ? (_step == 4 ? _startGame : () => setState(() => _step++)) : null,
+            child: Text(_step == 4 ? "INIZIA TEST" : "AVANTI"),
           ),
         ],
       ),
     );
   }
-  
+
   Color _getElementColor(Elemento e) {
     switch(e) {
       case Elemento.rosso: return Colors.red.shade900;

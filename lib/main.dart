@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'ui/screens/setup/setup_page.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'ui/screens/menu/main_menu_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +33,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.purple,
         useMaterial3: true,
       ),
-      home: const MainMenuPage(),
+      home: const MainMenuPage(), // Ora puntiamo correttamente al Menu
     );
   }
 }
