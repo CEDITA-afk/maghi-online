@@ -5,7 +5,7 @@ import '../../../data/overlord_repository.dart'; // Per caricare nomi boss
 import '../../../data/map_repository.dart'; // Per caricare nomi mappe
 import '../../../models/enums.dart'; // Per Elemento
 import '../game_page.dart';
-import '../../widgets/loader.dart'; // Se hai un widget loader, o usa CircularProgressIndicator
+//import '../../widgets/loader.dart'; // Se hai un widget loader, o usa CircularProgressIndicator
 
 class LobbyPage extends StatefulWidget {
   final FirebaseService firebase;
