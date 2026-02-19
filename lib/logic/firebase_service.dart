@@ -19,7 +19,8 @@ class FirebaseService {
 
   // --- LOBBY ---
   Future<String> createLobby() async {
-    String roomId = "ROOM-${Random().nextInt(9000) + 1000}";
+    // Genera un PIN a 4 cifre (es. 4521) invece di ROOM-4521
+    String roomId = "${Random().nextInt(9000) + 1000}";
     sessionId = roomId;
     
     await _db.collection('sessions').doc(roomId).set({
@@ -68,7 +69,6 @@ class FirebaseService {
     await _db.collection('sessions').doc(sessionId!).update({key: index});
   }
   
-  // NUOVO: Aggiorna campi nidificati senza sovrascrivere tutto
   Future<void> updateRoomData(Map<String, dynamic> data) async {
     if (sessionId == null) return;
     await _db.collection('sessions').doc(sessionId!).update(data);

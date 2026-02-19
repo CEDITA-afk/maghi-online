@@ -9,14 +9,12 @@ import '../../models/map_model.dart';
 import '../../logic/dice_manager.dart';
 import '../../logic/firebase_service.dart';
 
-// Import Widgets Modulari
 import '../widgets/status_bar.dart';
 import '../widgets/dice_tray.dart';
 import '../widgets/turn_control_bar.dart';
 import '../widgets/concentration_panel.dart';
 import '../widgets/dice_selection_dialog.dart';
 import '../views/battle_view.dart';
-import '../views/hero_selector_view.dart';
 import '../views/overlord_view.dart';
 import '../views/interactive_map_view.dart';
 
@@ -25,7 +23,11 @@ class GamePage extends StatefulWidget {
   final Map<Elemento, List<Spell>> playerDecks;
   final OverlordLoadout bossLoadout;
   final MapScenario mapScenario;
-  final String roomId; // Identificativo della stanza online per la sincronizzazione
+  final String roomId;
+  
+  // Parametri di controllo permessi Multiplayer
+  final String? myUserId;
+  final Map<String, dynamic> roles;
 
   const GamePage({
     super.key,
@@ -33,7 +35,9 @@ class GamePage extends StatefulWidget {
     required this.playerDecks,
     required this.bossLoadout,
     required this.mapScenario,
-    this.roomId = "ROOM_TEST", // ID di default per i test
+    required this.roomId,
+    this.myUserId,
+    this.roles = const {},
   });
 
   @override
@@ -47,7 +51,6 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
   late TabController _tabController; 
   late TabController _mainViewTabController; 
 
-  // Stato Entità
   late BossOverlord _boss;
   late Map<Elemento, Mago> _maghi;
   late List<Elemento> _activeElements;
@@ -57,23 +60,38 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
   Map<String, Point> _savedPositions = {}; 
   int _minionCounter = 0;
   
-  // Stato Turno
   int _actions = 0;
   Elemento? _activeHero;
   List<Elemento> _actedHeroes = [];
   bool _isOverlordPhase = false;
   
-  // Dadi
   List<ManaDice> _hand = [];
   final Set<int> _selectedDiceIndices = {};
+
+  // --- LOGICA PERMESSI ---
+  bool get isHotseat => widget.myUserId == null;
+  
+  bool canControl(String roleName) {
+    if (isHotseat) return true;
+    return widget.roles[roleName] == widget.myUserId;
+  }
+
+  bool canInteractMage(Elemento e) => canControl(e.name) && _activeHero == e;
+  bool canInteractOverlord() => canControl('overlord') && _isOverlordPhase;
 
   @override
   void initState() {
     super.initState();
-    _firebase = FirebaseService(widget.roomId); // Inizializzazione del servizio Firebase
+    _firebase = FirebaseService(widget.roomId);
     _initGame();
     _initDefaultPositions();
-    _tabController = TabController(length: _activeElements.length, vsync: this);
+    
+    // TabController ora ha +1 di lunghezza per l'Overlord
+    _tabController = TabController(length: _activeElements.length + 1, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) setState(() {}); // Forza l'aggiornamento della View
+    });
+    
     _mainViewTabController = TabController(length: 2, vsync: this);
   }
 
@@ -102,56 +120,34 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
     }
   }
 
-  // --- LOGICA SINCRONIZZAZIONE FIREBASE ---
-
-  /// Invia lo stato attuale del gioco al database per aggiornare tutti i client
   void _pushFullState() {
     FirebaseFirestore.instance.collection('sessions').doc(widget.roomId).set({
       'boss_hp': _boss.hp,
       'boss_mana': _boss.cubettiMana.map((key, value) => MapEntry(key.name, value)),
-      'hero_status': _maghi.map((key, m) => MapEntry(key.name, {
-        'hp': m.hp, 
-        'energy': m.energy, 
-        'isSpirito': m.isSpirito
-      })),
-      'minions': _minions.map((m) => {
-        'id': m.id, 'nome': m.nome, 'hp': m.hp, 'maxHp': m.maxHp, 
-        'tipo': m.nomeTipo, 'num': m.numeroProgressivo
-      }).toList(),
+      'hero_status': _maghi.map((key, m) => MapEntry(key.name, {'hp': m.hp, 'energy': m.energy, 'isSpirito': m.isSpirito})),
+      'minions': _minions.map((m) => {'id': m.id, 'nome': m.nome, 'hp': m.hp, 'maxHp': m.maxHp, 'tipo': m.nomeTipo, 'num': m.numeroProgressivo}).toList(),
       'active_hero': _activeHero?.name,
       'actions': _actions,
       'acted_heroes': _actedHeroes.map((e) => e.name).toList(),
       'is_overlord_phase': _isOverlordPhase,
-      'custom_objects': _customObjects.map((o) => o.toJson()).toList(),
-      'hand': _hand.map((d) => {
-        'id': d.id, 
-        'source': d.sourceColor.name, 
-        'effective': d.effectiveElement.name, 
-        'val': d.faceValue
-      }).toList(),
+      'hand': _hand.map((d) => {'id': d.id, 'source': d.sourceColor.name, 'effective': d.effectiveElement.name, 'val': d.faceValue}).toList(),
+      'selected_dice': _selectedDiceIndices.toList(), // Sincronizza i dadi selezionati!
     }, SetOptions(merge: true));
   }
 
-  // --- AZIONI MAPPA ---
-
   void _updatePosition(String id, int x, int y) {
     setState(() => _savedPositions[id] = Point(x, y));
-    _firebase.updatePosition(id, x, y); // Aggiornamento posizione online
+    _firebase.updatePosition(id, x, y);
   }
 
+  // .. (Codice Spawn Minion e Dialog invariati)
   void _spawnMinionFromMap(Minion template) {
     setState(() {
       _minionCounter++;
-      final newMinion = Minion(
-        id: "minion_${DateTime.now().millisecondsSinceEpoch}",
-        nome: "Scherano $_minionCounter",
-        hp: 5, maxHp: 5, nomeTipo: "Scherano",
-        numeroProgressivo: _minionCounter
-      );
-      _minions.add(newMinion);
-      _savedPositions[newMinion.id] = Point((widget.mapScenario.cols / 2).floor(), 4);
-      _pushFullState(); // Sincronizzazione lista minion
-      _firebase.updatePosition(newMinion.id, (widget.mapScenario.cols / 2).floor(), 4);
+      final m = Minion(id: "minion_${DateTime.now().millisecondsSinceEpoch}", nome: "Scherano $_minionCounter", hp: 5, maxHp: 5, nomeTipo: "Scherano", numeroProgressivo: _minionCounter);
+      _minions.add(m);
+      _savedPositions[m.id] = Point(5, 5);
+      _pushFullState();
     });
   }
 
@@ -159,65 +155,32 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
     setState(() {
       _customObjects.add(obj);
       _savedPositions[obj.id] = Point(obj.x, obj.y);
-      _pushFullState(); // Aggiunto per salvare l'oggetto sul cloud
+      _pushFullState();
     });
-    _firebase.updatePosition(obj.id, obj.x, obj.y);
   }
-
+  
   void _handleMinionTap(Minion m) {
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text("Gestione ${m.nome}"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text("HP: ${m.hp} / ${m.maxHp}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.remove_circle, color: Colors.red, size: 36),
-                    onPressed: () {
-                      setState(() => m.hp = (m.hp - 1).clamp(0, 99));
-                      setDialogState(() {});
-                      _pushFullState(); // Sincronizzazione HP minion
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle, color: Colors.green, size: 36),
-                    onPressed: () {
-                      setState(() => m.hp++);
-                      setDialogState(() {});
-                      _pushFullState();
-                    },
-                  ),
-                ],
-              ),
+      showDialog(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: Text(m.nome),
+            content: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                IconButton(icon: const Icon(Icons.remove_circle, color: Colors.red), onPressed: () { setState(() => m.hp--); setDialogState((){}); _pushFullState(); }),
+                Text("HP: ${m.hp}"),
+                IconButton(icon: const Icon(Icons.add_circle, color: Colors.green), onPressed: () { setState(() => m.hp++); setDialogState((){}); _pushFullState(); }),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () { setState(() { _minions.remove(m); _savedPositions.remove(m.id); _pushFullState(); }); Navigator.pop(ctx); }, child: const Text("ELIMINA", style: TextStyle(color: Colors.red))),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CHIUDI")),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _minions.remove(m);
-                  _savedPositions.remove(m.id);
-                  _pushFullState();
-                });
-                Navigator.pop(ctx);
-              }, 
-              child: const Text("ELIMINA", style: TextStyle(color: Colors.red))
-            ),
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CHIUDI")),
-          ],
         ),
-      ),
-    );
+      );
   }
-
-  // --- LOGICA DI GIOCO ---
 
   Future<void> _startHeroTurn(Elemento e) async {
     setState(() {
@@ -225,57 +188,47 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
       _actions = 2; 
       _hand.clear();
       _selectedDiceIndices.clear();
-      _pushFullState(); // Sincronizzazione inizio turno
+      _pushFullState();
     });
 
     Mago hero = _maghi[e]!;
-    List<ManaDice> keptDice = [];
-    if (hero.savedDice.isNotEmpty) {
-       keptDice.addAll(hero.savedDice);
-       hero.savedDice.clear(); 
-    }
+    List<ManaDice> keptDice = hero.savedDice.toList();
+    hero.savedDice.clear(); 
 
     await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => DiceSelectionDialog(
         maxSelection: 3,
-        onConfirm: (selectedColors) {
+        onConfirm: (colors) {
           setState(() {
             _hand.addAll(keptDice);
-            _hand.addAll(_dice.rollSpecific(selectedColors));
-            _pushFullState(); // Sincronizzazione dadi lanciati
+            _hand.addAll(_dice.rollSpecific(colors));
+            _pushFullState();
           });
         },
       ),
     );
-
-    int index = _activeElements.indexOf(e);
-    if (index != -1) _tabController.animateTo(index);
-    _mainViewTabController.animateTo(0);
   }
 
   void _onHpChange(dynamic entity, int delta) {
     setState(() {
       entity.hp = (entity.hp + delta).clamp(0, 999);
       if (entity is Mago) entity.checkSpiritStatus();
-      _pushFullState(); // Sincronizzazione HP eroi/boss
+      _pushFullState();
     });
   }
 
   void _cast(Spell s) {
     setState(() {
       _actions--;
-      List<Elemento> costToPay = List.from(s.costo);
       List<int> indicesToRemove = [];
       List<ManaDice> tempHand = List.from(_hand);
-
-      for (var req in costToPay) {
+      for (var req in List.from(s.costo)) {
          int idx = tempHand.indexWhere((d) => d.effectiveElement == req && !indicesToRemove.contains(tempHand.indexOf(d)));
          if (idx == -1) idx = tempHand.indexWhere((d) => d.effectiveElement == Elemento.jolly && !indicesToRemove.contains(tempHand.indexOf(d)));
          if (idx != -1) indicesToRemove.add(tempHand.indexOf(tempHand[idx]));
       }
-
       indicesToRemove.sort((a, b) => b.compareTo(a));
       for (int i in indicesToRemove) {
         _boss.riceviMana(_hand[i].effectiveElement); 
@@ -283,7 +236,7 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
       }
       _selectedDiceIndices.clear();
       _checkEndTurn();
-      _pushFullState(); // Sincronizzazione stato dopo magia
+      _pushFullState();
     });
   }
 
@@ -292,136 +245,76 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
       if (_activeHero != null) _actedHeroes.add(_activeHero!);
       _activeHero = null;
       _isOverlordPhase = true;
+      _tabController.animateTo(_activeElements.length); // Autoscroll al tab Overlord
       _pushFullState();
-      _mainViewTabController.animateTo(0);
     }
   }
 
   void _finishOverlordPhase() {
     setState(() {
       if (_actedHeroes.length == _activeElements.length) {
-        int rendita = widget.bossLoadout.getRendita(widget.numGiocatori);
-        for (int i = 0; i < rendita; i++) _boss.riceviMana(Elemento.jolly);
+        for (int i = 0; i < widget.bossLoadout.getRendita(widget.numGiocatori); i++) _boss.riceviMana(Elemento.jolly);
         _actedHeroes.clear();
       }
       _isOverlordPhase = false;
-      _pushFullState(); // Sincronizzazione fine fase overlord
+      _tabController.animateTo(0); // Ritorna al primo Mago
+      _pushFullState();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
-      stream: _firebase.gameStream, // Ascolto in tempo reale dei cambiamenti sul database
+      stream: _firebase.gameStream,
       builder: (context, snapshot) {
         if (snapshot.hasData && snapshot.data!.exists) {
           final data = snapshot.data!.data() as Map<String, dynamic>;
-          if (data['custom_objects'] != null) {
-            List<dynamic> objList = data['custom_objects'];
-            _customObjects = objList.map((o) => MapObject(
-              id: o['id'],
-              type: MapObjectType.values.firstWhere((e) => e.name == o['type']),
-              x: o['x'],
-              y: o['y'],
-              isLocked: o['isLocked'] ?? false,
-              color: Color(o['color']),
-              length: o['length'],
-              isVertical: o['isVertical'],
-            )).toList();
-          }
-          // Sincronizzazione Posizioni
-          if (data['positions'] != null) {
-            (data['positions'] as Map).forEach((id, coord) {
-              _savedPositions[id] = Point(coord['x'], coord['y']);
-            });
-          }
-
-          // Sincronizzazione Stato Boss
+          
+          if (data['positions'] != null) (data['positions'] as Map).forEach((id, coord) => _savedPositions[id] = Point(coord['x'], coord['y']));
           if (data['boss_hp'] != null) _boss.hp = data['boss_hp'];
-          if (data['boss_mana'] != null) {
-            (data['boss_mana'] as Map).forEach((key, val) {
-               Elemento e = Elemento.values.firstWhere((ev) => ev.name == key);
-               _boss.cubettiMana[e] = val;
-            });
-          }
-
-          // Sincronizzazione Eroi
+          if (data['boss_mana'] != null) (data['boss_mana'] as Map).forEach((k, v) => _boss.cubettiMana[Elemento.values.firstWhere((e) => e.name == k)] = v);
+          
           if (data['hero_status'] != null) {
-            (data['hero_status'] as Map).forEach((key, status) {
-               Elemento e = Elemento.values.firstWhere((ev) => ev.name == key);
-               if (_maghi.containsKey(e)) {
-                 _maghi[e]!.hp = status['hp'];
-                 _maghi[e]!.energy = status['energy'];
-                 _maghi[e]!.isSpirito = status['isSpirito'];
-               }
+            (data['hero_status'] as Map).forEach((k, st) {
+               Elemento e = Elemento.values.firstWhere((ev) => ev.name == k);
+               if (_maghi.containsKey(e)) { _maghi[e]!.hp = st['hp']; _maghi[e]!.energy = st['energy']; _maghi[e]!.isSpirito = st['isSpirito']; }
             });
           }
 
-          // Sincronizzazione Minions
-          if (data['minions'] != null) {
-            List<dynamic> mList = data['minions'];
-            _minions = mList.map((m) => Minion(
-              id: m['id'], nome: m['nome'], hp: m['hp'], maxHp: m['maxHp'],
-              nomeTipo: m['tipo'], numeroProgressivo: m['num']
-            )).toList();
-          }
-
-          // Sincronizzazione Dadi
           if (data['hand'] != null) {
-            List<dynamic> hList = data['hand'];
-            _hand = hList.map((d) => ManaDice(
-              id: d['id'],
-              sourceColor: Elemento.values.firstWhere((e) => e.name == d['source']),
-              effectiveElement: Elemento.values.firstWhere((e) => e.name == d['effective']),
-              faceValue: d['val']
-            )).toList();
+            _hand = (data['hand'] as List).map((d) => ManaDice(id: d['id'], sourceColor: Elemento.values.firstWhere((e) => e.name == d['source']), effectiveElement: Elemento.values.firstWhere((e) => e.name == d['effective']), faceValue: d['val'])).toList();
+          }
+          
+          if (data['selected_dice'] != null) {
+            _selectedDiceIndices.clear();
+            _selectedDiceIndices.addAll(List<int>.from(data['selected_dice']));
           }
 
-          // Sincronizzazione Fase Turno
           if (data['actions'] != null) _actions = data['actions'];
           if (data['is_overlord_phase'] != null) _isOverlordPhase = data['is_overlord_phase'];
-          if (data['active_hero'] != null) {
-            _activeHero = Elemento.values.firstWhere((e) => e.name == data['active_hero']);
-          } else {
-            _activeHero = null;
-          }
-          if (data['acted_heroes'] != null) {
-            List<dynamic> actedNames = data['acted_heroes'];
-            _actedHeroes = actedNames.map((name) => Elemento.values.firstWhere((e) => e.name == name)).toList();
-          }
+          _activeHero = data['active_hero'] != null ? Elemento.values.firstWhere((e) => e.name == data['active_hero']) : null;
+          if (data['acted_heroes'] != null) _actedHeroes = (data['acted_heroes'] as List).map((n) => Elemento.values.firstWhere((e) => e.name == n)).toList();
         }
+
+        List<Widget> tabWidgets = _activeElements.map((e) => Tab(icon: Icon(_getIcon(e)))).toList();
+        tabWidgets.add(const Tab(icon: Icon(Icons.security, color: Colors.purpleAccent))); // Tab Overlord
 
         return Scaffold(
           appBar: AppBar(
-            title: Text("${widget.bossLoadout.nome} - Room: ${widget.roomId}"),
+            title: Text("Stanza: ${widget.roomId}"),
             backgroundColor: Colors.grey.shade900,
-            foregroundColor: Colors.white,
             actions: [
               IconButton(icon: const Icon(Icons.table_bar), onPressed: () => _mainViewTabController.animateTo(0)),
               IconButton(icon: const Icon(Icons.map), onPressed: () => _mainViewTabController.animateTo(1)),
             ],
-            bottom: TabBar(
-              controller: _tabController,
-              tabs: _activeElements.map((e) => Tab(icon: Icon(_getIcon(e)))).toList(),
-            ),
+            bottom: TabBar(controller: _tabController, tabs: tabWidgets),
           ),
           body: TabBarView(
             controller: _mainViewTabController,
             physics: const NeverScrollableScrollPhysics(),
             children: [
               _buildTabletopView(),
-              InteractiveMapView(
-                scenario: widget.mapScenario,
-                heroes: _maghi,
-                boss: _boss,
-                minions: _minions,
-                customObjects: _customObjects,
-                savedPositions: _savedPositions,
-                onPositionChanged: _updatePosition,
-                onSpawnMinion: _spawnMinionFromMap,
-                onSpawnObject: _spawnObjectFromMap,
-                onMinionTap: _handleMinionTap,
-              ),
+              InteractiveMapView(scenario: widget.mapScenario, heroes: _maghi, boss: _boss, minions: _minions, customObjects: _customObjects, savedPositions: _savedPositions, onPositionChanged: _updatePosition, onSpawnMinion: _spawnMinionFromMap, onSpawnObject: _spawnObjectFromMap, onMinionTap: _handleMinionTap),
             ],
           ),
         );
@@ -434,56 +327,46 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
       children: [
         StatusBar(boss: _boss, maghi: _maghi, onHpChange: _onHpChange),
         if (_activeHero != null)
-          TurnControlBar(
-            actions: _actions,
-            energy: _maghi[_activeHero]!.energy,
-            onMove: () { setState(() => _actions--); _pushFullState(); _mainViewTabController.animateTo(1); },
-            onInteract: () => setState(() { _actions--; _pushFullState(); }),
-            onHelp: () => setState(() { _actions--; _pushFullState(); }),
-            onDisarm: () {},
-            onEndTurn: () => setState(() { _actions = 0; _checkEndTurn(); }),
+          IgnorePointer(
+            ignoring: !canInteractMage(_activeHero!),
+            child: TurnControlBar(
+              actions: _actions,
+              energy: _maghi[_activeHero]!.energy,
+              onMove: () { setState(() => _actions--); _pushFullState(); _mainViewTabController.animateTo(1); },
+              onInteract: () => setState(() { _actions--; _pushFullState(); }),
+              onHelp: () => setState(() { _actions--; _pushFullState(); }),
+              onDisarm: () {},
+              onEndTurn: () => setState(() { _actions = 0; _checkEndTurn(); }),
+            ),
           ),
-        Expanded(child: _buildMainArea()),
+        Expanded(child: _buildMainArea()), // Gestisce internamente Mago vs Overlord
         if (_activeHero != null) ...[
-          ConcentrationPanel(
-            selectedDiceCount: _selectedDiceIndices.length,
-            currentEnergy: _maghi[_activeHero]!.energy,
-            onConvert: () {
-              if (_selectedDiceIndices.isEmpty) return;
-              setState(() {
-                _maghi[_activeHero]!.energy += _selectedDiceIndices.length;
-                List<int> sorted = _selectedDiceIndices.toList()..sort((a,b) => b.compareTo(a));
-                for (var i in sorted) _hand.removeAt(i);
-                _selectedDiceIndices.clear();
-                _pushFullState(); // Sincronizzazione dadi convertiti in energia
-              });
-            },
-            onReroll: () {
-              if (_selectedDiceIndices.isEmpty) return;
-              setState(() {
-                _maghi[_activeHero]!.energy -= _selectedDiceIndices.length;
-                for (var i in _selectedDiceIndices) {
-                  _hand[i] = _dice.rerollDie(_hand[i]);
-                }
-                _pushFullState(); // Sincronizzazione ririoll
-              });
-            },
-            onKeep: () {
-              if (_selectedDiceIndices.length != 1) return;
-              setState(() {
-                _maghi[_activeHero]!.energy -= 1;
-                int idx = _selectedDiceIndices.first;
-                _maghi[_activeHero]!.savedDice.add(_hand[idx]);
-                _hand.removeAt(idx);
-                _selectedDiceIndices.clear();
-                _pushFullState(); // Sincronizzazione dado salvato
-              });
-            },
+          IgnorePointer(
+            ignoring: !canInteractMage(_activeHero!),
+            child: ConcentrationPanel(
+              selectedDiceCount: _selectedDiceIndices.length,
+              currentEnergy: _maghi[_activeHero]!.energy,
+              onConvert: () {
+                if (_selectedDiceIndices.isEmpty) return;
+                setState(() { _maghi[_activeHero]!.energy += _selectedDiceIndices.length; List<int> sorted = _selectedDiceIndices.toList()..sort((a,b) => b.compareTo(a)); for (var i in sorted) _hand.removeAt(i); _selectedDiceIndices.clear(); _pushFullState(); });
+              },
+              onReroll: () {
+                if (_selectedDiceIndices.isEmpty) return;
+                setState(() { _maghi[_activeHero]!.energy -= _selectedDiceIndices.length; for (var i in _selectedDiceIndices) _hand[i] = _dice.rerollDie(_hand[i]); _pushFullState(); });
+              },
+              onKeep: () {
+                if (_selectedDiceIndices.length != 1) return;
+                setState(() { _maghi[_activeHero]!.energy -= 1; int idx = _selectedDiceIndices.first; _maghi[_activeHero]!.savedDice.add(_hand[idx]); _hand.removeAt(idx); _selectedDiceIndices.clear(); _pushFullState(); });
+              },
+            ),
           ),
-          DiceTray(
-            rolledHand: _hand,
-            selectedIndices: _selectedDiceIndices,
-            onDieTap: (i) => setState(() => _selectedDiceIndices.contains(i) ? _selectedDiceIndices.remove(i) : _selectedDiceIndices.add(i)),
+          IgnorePointer(
+            ignoring: !canInteractMage(_activeHero!),
+            child: DiceTray(
+              rolledHand: _hand,
+              selectedIndices: _selectedDiceIndices,
+              onDieTap: (i) => setState(() { _selectedDiceIndices.contains(i) ? _selectedDiceIndices.remove(i) : _selectedDiceIndices.add(i); _pushFullState(); }),
+            ),
           ),
         ]
       ],
@@ -491,35 +374,66 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
   }
 
   Widget _buildMainArea() {
-    if (_isOverlordPhase) {
-      return OverlordView(
-        boss: _boss,
-        abilitaBoss: widget.bossLoadout.abilitaSelezionate,
-        onAssignCube: (a, i, c) { setState(() => a.tryFillSlot(i, c)); _pushFullState(); },
-        onCastAbility: (a) { setState(() => a.reset()); _pushFullState(); },
-        onContinue: _finishOverlordPhase,
-        isRoundOver: _actedHeroes.length == _activeElements.length,
+    int tabIndex = _tabController.index;
+    bool isOverlordTab = tabIndex == _activeElements.length;
+
+    // SCENARIO 1: TAB DELL'OVERLORD
+    if (isOverlordTab) {
+      return AbsorbPointer(
+        absorbing: !canInteractOverlord(), // Disabilita click se non sei tu o non è il tuo turno
+        child: OverlordView(
+          boss: _boss,
+          abilitaBoss: widget.bossLoadout.abilitaSelezionate,
+          onAssignCube: (a, i, c) { setState(() => a.tryFillSlot(i, c)); _pushFullState(); },
+          onCastAbility: (a) { setState(() => a.reset()); _pushFullState(); },
+          onContinue: _finishOverlordPhase,
+          isRoundOver: _actedHeroes.length == _activeElements.length,
+        ),
       );
     }
-    if (_activeHero == null) {
-      return HeroSelectorView(actedHeroes: _actedHeroes, activeElements: _activeElements, onSelected: _startHeroTurn);
+
+    // SCENARIO 2: TAB DI UN MAGO
+    Elemento currentMage = _activeElements[tabIndex];
+
+    if (_isOverlordPhase) {
+      return const Center(child: Text("Turno dell'Overlord in corso...", style: TextStyle(fontSize: 18, color: Colors.white54)));
     }
-    return BattleView(
-      deck: widget.playerDecks[_activeHero] ?? [],
-      hand: _hand,
-      actions: _actions,
-      activeElement: _activeHero!,
-      onCast: _cast,
+
+    if (_activeHero == currentMage) {
+      return AbsorbPointer(
+        absorbing: !canInteractMage(currentMage),
+        child: BattleView(
+          deck: widget.playerDecks[currentMage] ?? [],
+          hand: _hand,
+          actions: _actions,
+          activeElement: currentMage,
+          onCast: _cast,
+        ),
+      );
+    }
+
+    if (_activeHero != null) {
+      return Center(child: Text("Turno di ${_activeHero!.name.toUpperCase()} in corso...", style: const TextStyle(fontSize: 18)));
+    }
+
+    // Se non c'è turno attivo, mostra il pulsante Start se l'eroe non ha agito
+    bool hasActed = _actedHeroes.contains(currentMage);
+    if (hasActed) return const Center(child: Text("Questo eroe ha già agito nel round attuale."));
+
+    return Center(
+      child: ElevatedButton.icon(
+        icon: const Icon(Icons.play_arrow),
+        label: Text("INIZIA TURNO ${currentMage.name.toUpperCase()}"),
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+          backgroundColor: _getElementColor(currentMage),
+          foregroundColor: Colors.white,
+        ),
+        onPressed: canControl(currentMage.name) ? () => _startHeroTurn(currentMage) : null,
+      )
     );
   }
 
-  IconData _getIcon(Elemento e) {
-    switch(e) {
-      case Elemento.rosso: return Icons.local_fire_department;
-      case Elemento.blu: return Icons.water_drop;
-      case Elemento.verde: return Icons.grass;
-      case Elemento.giallo: return Icons.flash_on;
-      default: return Icons.help;
-    }
-  }
+  IconData _getIcon(Elemento e) => e == Elemento.rosso ? Icons.local_fire_department : e == Elemento.blu ? Icons.water_drop : e == Elemento.verde ? Icons.grass : Icons.flash_on;
+  Color _getElementColor(Elemento e) => e == Elemento.rosso ? Colors.red : e == Elemento.blu ? Colors.blue : e == Elemento.verde ? Colors.green : Colors.orange;
 }

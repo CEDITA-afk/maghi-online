@@ -70,7 +70,6 @@ class _LobbyPageState extends State<LobbyPage> {
     return deck;
   }
 
-  // Apre il selettore grimori in multiplayer e salva sul cloud
   void _openGrimorio(Elemento e, Map<String, dynamic> cloudDecks) async {
     List<Spell> currentSelection = [];
     if (cloudDecks.containsKey(e.name)) {
@@ -85,7 +84,7 @@ class _LobbyPageState extends State<LobbyPage> {
       allSpells: _allSpells.where((s) => s.sourceElement == e).toList(),
       initialSelection: currentSelection,
       onConfirm: (newList) {
-        // Salva le carte scelte nel database, specifiche solo per quell'elemento
+        // Sincronizza i cambiamenti del mazzo nel cloud per questa stanza
         widget.firebase.updateRoomData({
           'decks.${e.name}': newList.map((s) => s.id).toList()
         });
@@ -115,7 +114,7 @@ class _LobbyPageState extends State<LobbyPage> {
         }
       });
 
-      // Sicurezza in caso nessuno avesse scelto eroi
+      // Se in qualche modo nessuno ha preso un eroe ma la partita è partita, genera uno di backup per non crashare
       if (finalDecks.isEmpty) finalDecks[Elemento.rosso] = _generateStandardDeck(Elemento.rosso);
 
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => GamePage(
@@ -124,6 +123,8 @@ class _LobbyPageState extends State<LobbyPage> {
         bossLoadout: boss,
         numGiocatori: finalDecks.length,
         playerDecks: finalDecks,
+        myUserId: widget.firebase.myUserId, // Passa il tuo ID per le restrizioni
+        roles: roles,                       // Passa la mappa dei ruoli
       )));
     } catch (e) {
       debugPrint("Errore avvio partita: $e");
@@ -136,7 +137,7 @@ class _LobbyPageState extends State<LobbyPage> {
     if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     return Scaffold(
-      appBar: AppBar(title: Text("LOBBY: ${widget.roomId}"), centerTitle: true, backgroundColor: Colors.grey.shade900),
+      appBar: AppBar(title: Text("PIN STANZA: ${widget.roomId}"), centerTitle: true, backgroundColor: Colors.grey.shade900),
       body: StreamBuilder<DocumentSnapshot>(
         stream: widget.firebase.lobbyStream,
         builder: (context, snapshot) {
@@ -145,7 +146,7 @@ class _LobbyPageState extends State<LobbyPage> {
           
           if (data['status'] == 'PLAYING') {
             WidgetsBinding.instance.addPostFrameCallback((_) => _startGame(data));
-            return const Center(child: Text("Caricamento partita..."));
+            return const Center(child: Text("Caricamento partita...", style: TextStyle(fontSize: 18)));
           }
 
           String myId = widget.firebase.myUserId!;
@@ -156,7 +157,7 @@ class _LobbyPageState extends State<LobbyPage> {
           List<dynamic> readyPlayers = data['ready'] ?? [];
           bool amIReady = readyPlayers.contains(myId);
 
-          // L'host può startare SOLO se qualcuno è pronto E c'è almeno un Eroe
+          // Controlli per l'Host: la partita parte solo se c'è almeno un Eroe e qualcuno è pronto
           bool canStart = readyPlayers.isNotEmpty && roles.keys.any((k) => k != 'overlord');
 
           return Column(

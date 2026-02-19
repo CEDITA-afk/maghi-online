@@ -26,12 +26,11 @@ class _SetupPageState extends State<SetupPage> {
   List<MapScenario> _availableMaps = [];
   bool _isLoading = true;
 
-  int _step = 1; // 1: Boss, 2: Eroi, 3: Abilità Boss, 4: Mappa
+  int _step = 1; // 1: Boss & Eroi, 2: Grimori, 3: Abilità Boss, 4: Mappa
   int _playerCount = 3;
   OverlordLoadout? _selectedOverlord;
   MapScenario? _selectedMap;
   
-  final TextEditingController _roomController = TextEditingController(text: "HOTSEAT_MODE");
   final Map<Elemento, List<Spell>> _heroDecks = {};
   
   final Set<OverlordAbility> _selFast = {};
@@ -45,30 +44,24 @@ class _SetupPageState extends State<SetupPage> {
     _loadData();
   }
 
-  @override
-  void dispose() {
-    _roomController.dispose();
-    super.dispose();
-  }
-
   Future<void> _loadData() async {
     final bosses = await _overlordRepo.getAvailableOverlords();
     final spells = await _spellRepo.loadAllSpells();
     final maps = await _mapRepo.getAvailableScenarios();
     
-    setState(() {
-      _availableOverlords = bosses;
-      _allSpells = spells;
-      _availableMaps = maps;
+    if (mounted) {
+      setState(() {
+        _availableOverlords = bosses;
+        _allSpells = spells;
+        _availableMaps = maps;
 
-      if (bosses.isNotEmpty) _selectedOverlord = bosses.first;
-      if (maps.isNotEmpty) _selectedMap = maps.first;
+        if (bosses.isNotEmpty) _selectedOverlord = bosses.first;
+        if (maps.isNotEmpty) _selectedMap = maps.first;
 
-      // Inizializza i mazzi standard per default (primi N elementi)
-      _updateDefaultDecks(spells);
-
-      _isLoading = false;
-    });
+        _updateDefaultDecks(spells);
+        _isLoading = false;
+      });
+    }
   }
 
   void _updateDefaultDecks(List<Spell> spells) {
@@ -120,7 +113,9 @@ class _SetupPageState extends State<SetupPage> {
           playerDecks: _heroDecks,
           bossLoadout: finalLoadout,
           mapScenario: _selectedMap!,
-          roomId: _roomController.text.trim().isEmpty ? "ROOM_TEST" : _roomController.text.trim(),
+          roomId: "HOTSEAT", // ID fisso per Hotseat locale
+          myUserId: null,    // NULL = Modalità Hotseat, controlli tutto tu
+          roles: const {},   // Nessun limite di ruolo
         ),
       ),
     );
@@ -132,7 +127,7 @@ class _SetupPageState extends State<SetupPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("Setup Partita - Fase $_step/4"),
+        title: Text("Modalità Test (Hotseat) - Fase $_step/4"),
         backgroundColor: Colors.grey.shade900,
         foregroundColor: Colors.white,
       ),
@@ -197,7 +192,7 @@ class _SetupPageState extends State<SetupPage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("GRIMORI", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text("GRIMORI EROI", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
@@ -255,7 +250,7 @@ class _SetupPageState extends State<SetupPage> {
               ),
             ),
           ),
-          if (hasDeck)
+          if (hasDeck) // X per deselezionare il mago se vogliamo giocare con meno eroi
             Positioned(
               top: 4, right: 4,
               child: IconButton(
@@ -338,7 +333,7 @@ class _SetupPageState extends State<SetupPage> {
           ElevatedButton(
             onPressed: canProceed ? (_step == 4 ? _startGame : _nextStep) : null,
             style: ElevatedButton.styleFrom(backgroundColor: canProceed ? Colors.purpleAccent : Colors.grey),
-            child: Text(_step == 4 ? "INIZIA BATTAGLIA" : "AVANTI"),
+            child: Text(_step == 4 ? "INIZIA TEST" : "AVANTI"),
           ),
         ],
       ),
