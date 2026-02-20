@@ -1,42 +1,38 @@
 import 'dart:convert';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart';
 import '../models/overlord_model.dart';
 
 class OverlordRepository {
-  
-  // 1. Ottiene la lista di tutti i boss disponibili
   Future<List<OverlordLoadout>> getAvailableOverlords() async {
-    List<String> filePaths = [];
+    List<OverlordLoadout> overlords = [];
 
     try {
-      // Tenta di caricare il manifesto automatico
+      // 1. Carica il manifest di tutti gli asset dell'app
       final manifestContent = await rootBundle.loadString('AssetManifest.json');
-      final Map<String, dynamic> manifest = json.decode(manifestContent);
+      final Map<String, dynamic> manifestMap = json.decode(manifestContent);
 
-      filePaths = manifest.keys
-          .where((String key) => key.contains('assets/data/overlords/'))
-          .where((String key) => key.endsWith('.json'))
+      // 2. Filtra solo i file che si trovano nella cartella corretta e sono .json
+      final List<String> overlordPaths = manifestMap.keys
+          .where((String key) => 
+            key.startsWith('assets/data/overlords/') && 
+            key.endsWith('.json'))
           .toList();
 
+      // 3. Cicla sui file trovati e caricali
+      for (String path in overlordPaths) {
+        try {
+          final String response = await rootBundle.loadString(path);
+          final data = json.decode(response);
+          overlords.add(OverlordLoadout.fromJson(data));
+          print("Caricato Boss dinamicamente: $path");
+        } catch (e) {
+          print("Errore durante il parsing del file $path: $e");
+        }
+      }
     } catch (e) {
-      // SE FALLISCE (Errore 404), USA QUESTA LISTA MANUALE
-      print("⚠️ AssetManifest non trovato. Uso lista manuale di fallback.");
-      filePaths = [
-        'assets/data/overlords/exo_01.json',
-        'assets/data/overlords/ignis_02.json',
-      ];
+      print("Errore critico durante la scansione della cartella overlords: $e");
     }
 
-    List<OverlordLoadout> overlords = [];
-    for (String path in filePaths) {
-      try {
-        final String content = await rootBundle.loadString(path);
-        final Map<String, dynamic> data = json.decode(content);
-        overlords.add(OverlordLoadout.fromJson(data));
-      } catch (e) {
-        print("Errore caricamento file $path: $e");
-      }
-    }
     return overlords;
   }
 }
