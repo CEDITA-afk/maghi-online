@@ -67,6 +67,9 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
   List<ManaDice> _hand = [];
   final Set<int> _selectedDiceIndices = {};
 
+  // NUOVO: Variabile per la Bacheca
+  List<Map<String, dynamic>> _sharedNotes = [];
+
   bool get isHotseat => widget.myUserId == null;
   
   bool canControl(String roleName) {
@@ -121,6 +124,10 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
     FirebaseFirestore.instance.collection('sessions').doc(widget.roomId).set({
       'boss_hp': _boss.hp,
       'boss_mana': _boss.cubettiMana.map((key, value) => MapEntry(key.name, value)),
+      'boss_abilities': widget.bossLoadout.abilitaSelezionate.map((a) => {
+        'nome': a.nome,
+        'currentFill': a.currentFill.map((e) => e?.name).toList(),
+      }).toList(),
       'hero_status': _maghi.map((key, m) => MapEntry(key.name, {'hp': m.hp, 'energy': m.energy, 'isSpirito': m.isSpirito})),
       'minions': _minions.map((m) => {'id': m.id, 'nome': m.nome, 'hp': m.hp, 'maxHp': m.maxHp, 'tipo': m.nomeTipo, 'num': m.numeroProgressivo}).toList(),
       'active_hero': _activeHero?.name,
@@ -129,6 +136,7 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
       'is_overlord_phase': _isOverlordPhase,
       'hand': _hand.map((d) => {'id': d.id, 'source': d.sourceColor.name, 'effective': d.effectiveElement.name, 'val': d.faceValue}).toList(),
       'selected_dice': _selectedDiceIndices.toList(),
+      'shared_notes': _sharedNotes, // SALVA LA BACHECA SUL CLOUD
     }, SetOptions(merge: true));
   }
 
@@ -241,7 +249,7 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
       if (_activeHero != null) _actedHeroes.add(_activeHero!);
       _activeHero = null;
       _isOverlordPhase = true;
-      _tabController.animateTo(_activeElements.length); // Sposta la visuale sull'Overlord
+      _tabController.animateTo(_activeElements.length); 
       _pushFullState();
     }
   }
@@ -250,11 +258,9 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
     setState(() {
       if (_actedHeroes.length == _activeElements.length) {
         for (int i = 0; i < widget.bossLoadout.getRendita(widget.numGiocatori); i++) _boss.riceviMana(Elemento.jolly);
-        _actedHeroes.clear(); // Resetta il round, tutti possono agire di nuovo
+        _actedHeroes.clear(); 
       }
       _isOverlordPhase = false;
-      // RIMOSSO l'autoscroll obbligatorio verso il Mago 0.
-      // Ora i giocatori restano dove sono e possono cliccare liberamente il Mago che desiderano.
       _pushFullState();
     });
   }
@@ -271,6 +277,19 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
           if (data['boss_hp'] != null) _boss.hp = data['boss_hp'];
           if (data['boss_mana'] != null) (data['boss_mana'] as Map).forEach((k, v) => _boss.cubettiMana[Elemento.values.firstWhere((e) => e.name == k)] = v);
           
+          if (data['boss_abilities'] != null) {
+            List abDataList = data['boss_abilities'];
+            for (var abData in abDataList) {
+              try {
+                var ability = widget.bossLoadout.abilitaSelezionate.firstWhere((a) => a.nome == abData['nome']);
+                List fillData = abData['currentFill'];
+                for (int i = 0; i < fillData.length; i++) {
+                  ability.currentFill[i] = fillData[i] != null ? Elemento.values.firstWhere((e) => e.name == fillData[i]) : null;
+                }
+              } catch (e) {}
+            }
+          }
+
           if (data['hero_status'] != null) {
             (data['hero_status'] as Map).forEach((k, st) {
                Elemento e = Elemento.values.firstWhere((ev) => ev.name == k);
@@ -286,6 +305,11 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
             _selectedDiceIndices.clear();
             _selectedDiceIndices.addAll(List<int>.from(data['selected_dice']));
           }
+          
+          // NUOVO: Sincronizza le note condivise
+          if (data['shared_notes'] != null) {
+            _sharedNotes = List<Map<String, dynamic>>.from(data['shared_notes']);
+          }
 
           if (data['actions'] != null) _actions = data['actions'];
           if (data['is_overlord_phase'] != null) _isOverlordPhase = data['is_overlord_phase'];
@@ -293,7 +317,6 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
           if (data['acted_heroes'] != null) _actedHeroes = (data['acted_heroes'] as List).map((n) => Elemento.values.firstWhere((e) => e.name == n)).toList();
         }
 
-        // TABS: Feedback visivo per i maghi che hanno già agito
         List<Widget> tabWidgets = _activeElements.map((e) {
           bool hasActed = _actedHeroes.contains(e);
           return Tab(
@@ -310,11 +333,20 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
             title: Text("PIN: ${widget.roomId}"),
             backgroundColor: Colors.grey.shade900,
             actions: [
+              // BOTTone PER APRIRE LA BACHECA
+              Builder(
+                builder: (context) => IconButton(
+                  icon: const Icon(Icons.sticky_note_2, color: Colors.yellow),
+                  tooltip: "Bacheca Note",
+                  onPressed: () => Scaffold.of(context).openEndDrawer(),
+                ),
+              ),
               IconButton(icon: const Icon(Icons.table_bar), onPressed: () => _mainViewTabController.animateTo(0)),
               IconButton(icon: const Icon(Icons.map), onPressed: () => _mainViewTabController.animateTo(1)),
             ],
             bottom: TabBar(controller: _tabController, tabs: tabWidgets),
           ),
+          endDrawer: _buildSharedNotesDrawer(), // IL PANNELLO LATERALE
           body: TabBarView(
             controller: _mainViewTabController,
             physics: const NeverScrollableScrollPhysics(),
@@ -325,6 +357,88 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
           ),
         );
       }
+    );
+  }
+
+  // NUOVO WIDGET: IL PANNELLO LATERALE
+  Widget _buildSharedNotesDrawer() {
+    TextEditingController noteController = TextEditingController();
+    return Drawer(
+      backgroundColor: Colors.grey.shade900,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+            color: Colors.black,
+            child: const Row(
+              children: [
+                Icon(Icons.sticky_note_2, color: Colors.yellow),
+                SizedBox(width: 10),
+                Text("BACHECA STATUS", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _sharedNotes.isEmpty
+                ? const Center(child: Text("Nessuna nota attiva.\nUsa la bacheca per tracciare\nfasi, condizioni o ancore.", textAlign: TextAlign.center, style: TextStyle(color: Colors.white38)))
+                : ListView.builder(
+                    itemCount: _sharedNotes.length,
+                    itemBuilder: (context, i) {
+                      final nota = _sharedNotes[i];
+                      return Card(
+                        color: Color(nota['color'] ?? Colors.grey.shade800.value),
+                        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        child: ListTile(
+                          title: Text(nota['text'], style: const TextStyle(color: Colors.white)),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.white54),
+                            onPressed: () => setState(() {
+                              _sharedNotes.removeAt(i);
+                              _pushFullState();
+                            }),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: noteController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(
+                      hintText: "Es: 'Fase 2', 'Veleno verde'",
+                      hintStyle: TextStyle(color: Colors.white38),
+                      filled: true, fillColor: Colors.black54
+                    ),
+                  ),
+                ),
+                IconButton.filled(
+                  icon: const Icon(Icons.add),
+                  onPressed: () {
+                    if (noteController.text.isNotEmpty) {
+                      setState(() {
+                        Color noteColor = widget.myUserId == null ? Colors.blueGrey.shade800 : 
+                                          (widget.roles['overlord'] == widget.myUserId ? Colors.red.shade900 : Colors.blue.shade900);
+                        _sharedNotes.add({
+                          'text': noteController.text,
+                          'color': noteColor.value,
+                        });
+                        _pushFullState();
+                      });
+                      noteController.clear();
+                    }
+                  }
+                )
+              ],
+            ),
+          )
+        ],
+      ),
     );
   }
 
@@ -383,27 +497,34 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
     int tabIndex = _tabController.index;
     bool isOverlordTab = tabIndex == _activeElements.length;
 
-    // 1. OVERLORD VIEW
     if (isOverlordTab) {
       return AbsorbPointer(
         absorbing: !canInteractOverlord(),
         child: OverlordView(
           boss: _boss,
+          bossLoadout: widget.bossLoadout,
           abilitaBoss: widget.bossLoadout.abilitaSelezionate,
-          onAssignCube: (a, i, c) { setState(() => a.tryFillSlot(i, c)); _pushFullState(); },
-          onCastAbility: (a) { setState(() => a.reset()); _pushFullState(); },
+          onAssignCube: (a, i, c) { 
+            setState(() {
+              if (a.tryFillSlot(i, c)) {
+                _boss.cubettiMana[c] = (_boss.cubettiMana[c] ?? 1) - 1;
+              }
+            }); 
+            _pushFullState(); 
+          },
+          onCastAbility: (a) { 
+            setState(() => a.reset()); 
+            _pushFullState(); 
+          },
           onContinue: _finishOverlordPhase,
           isRoundOver: _actedHeroes.length == _activeElements.length,
         ),
       );
     }
 
-    // 2. MAGE VIEW
     Elemento currentMage = _activeElements[tabIndex];
 
-    if (_isOverlordPhase) {
-      return const Center(child: Text("Turno dell'Overlord in corso...", style: TextStyle(fontSize: 18, color: Colors.white54)));
-    }
+    if (_isOverlordPhase) return const Center(child: Text("Turno dell'Overlord in corso...", style: TextStyle(fontSize: 18, color: Colors.white54)));
 
     if (_activeHero == currentMage) {
       return AbsorbPointer(
@@ -418,11 +539,8 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
       );
     }
 
-    if (_activeHero != null) {
-      return Center(child: Text("Turno di ${_activeHero!.name.toUpperCase()} in corso...", style: const TextStyle(fontSize: 18)));
-    }
+    if (_activeHero != null) return Center(child: Text("Turno di ${_activeHero!.name.toUpperCase()} in corso...", style: const TextStyle(fontSize: 18)));
 
-    // Qui il giocatore può SCEGLIERE liberamente quale Mago far agire (se non ha già agito)
     bool hasActed = _actedHeroes.contains(currentMage);
     if (hasActed) return const Center(child: Text("Questo Eroe ha già agito in questo round. Seleziona un altro Eroe."));
 

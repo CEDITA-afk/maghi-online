@@ -7,6 +7,11 @@
     "hp_fase2": { "2": 15, "3": 20, "4": 30 },
     "rendita": { "2": 3, "3": 2, "4": 1 }
   },
+  "phases": {
+    "1": "La Caccia nel Labirinto: La presenza del Boss nel dungeon non è certa. Agisce tramite Segnalini Ombra sparsi sulla mappa. Gli attacchi alle Ombre hanno una probabilità percentuale di rivelare Vesper o attivare una trappola.",
+    "2": "L'Arena Geometrica: Si posiziona al centro della mappa (6,7). Evoca 3 Prismi di Luce agli angoli che generano barriere laser dannose.",
+    "3": "Collasso Totale: I Prismi esplodono. L'anello più esterno della griglia 12x14 collassa alla fine di ogni round, restringendo il campo di battaglia."
+  },
   "pools": {
     "fast": [
       {

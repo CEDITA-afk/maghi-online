@@ -7,6 +7,11 @@
     "hp_fase2": { "2": 15, "3": 25, "4": 35 },
     "rendita": { "2": 3, "3": 2, "4": 1 }
   },
+  "phases": {
+    "1": "La Caccia (L'Inganno): All'inizio della partita, la presenza del Boss nel dungeon non è certa. Sulla griglia vengono sparsi 6 Segnalini Anomalia. Ispezionare o attaccare un segnalino ha una probabilità percentuale di rivelare il Boss; in caso di fallimento innesca una trappola esplosiva (es. pozza di scorie).",
+    "2": "Accensione Fornaci: Quando il Boss scende al 60% degli HP, si rivela completamente e sblocca le abilità Medie (Costi Misti). Inizia a fondere gli elementi sulla plancia per creare ostacoli letali come muri di vapore o zone elettrificate.",
+    "3": "Fusione del Nucleo: Al 30% degli HP, il Boss sblocca le Ultimate. Consuma le enormi riserve di dadi misti accumulate nelle fasi precedenti per riempire la mappa di pericoli permanenti e scatenare attacchi ad area."
+  },
   "pools": {
     "fast": [
       {

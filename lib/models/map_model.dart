@@ -17,7 +17,8 @@ class Point {
   String toString() => 'Point($x, $y)';
 }
 
-enum MapObjectType { wall, obstacle, hazard, objective, spawnPoint, custom }
+// AGGIUNTO IL TIPO "textLabel"
+enum MapObjectType { wall, obstacle, hazard, objective, spawnPoint, custom, textLabel }
 
 class MapObject {
   final String id;
@@ -28,6 +29,7 @@ class MapObject {
   Color color;
   int length; 
   bool isVertical; 
+  String? text; // NUOVO: Permette di dare un testo all'oggetto
 
   MapObject({
     required this.id,
@@ -38,11 +40,13 @@ class MapObject {
     this.color = Colors.brown,
     this.length = 1,
     this.isVertical = false,
+    this.text,
   });
 
   Map<String, dynamic> toJson() => {
     'id': id, 'type': type.name, 'x': x, 'y': y,
     'color': color.value, 'length': length, 'isVertical': isVertical,
+    'text': text,
   };
 }
 

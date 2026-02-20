@@ -96,6 +96,7 @@ class OverlordLoadout {
   final String nome;
   final String descrizione;
   final Map<String, dynamic> scaling;
+  final Map<String, dynamic> phases; // <--- NUOVO: Fasi dinamiche prese dal JSON
   
   final List<OverlordAbility> poolFast;
   final List<OverlordAbility> poolMedium;
@@ -106,6 +107,7 @@ class OverlordLoadout {
 
   OverlordLoadout({
     required this.id, required this.nome, required this.descrizione, required this.scaling,
+    required this.phases, // <--- NUOVO
     required this.poolFast, required this.poolMedium, required this.poolUltimate, required this.poolChaos,
     List<OverlordAbility>? selected,
   }) : abilitaSelezionate = selected ?? [];
@@ -113,7 +115,9 @@ class OverlordLoadout {
   factory OverlordLoadout.fromJson(Map<String, dynamic> json) {
     var pools = json['pools'];
     return OverlordLoadout(
-      id: json['id'], nome: json['name'], descrizione: json['description'] ?? "", scaling: json['scaling'],
+      id: json['id'], nome: json['name'], descrizione: json['description'] ?? "", 
+      scaling: json['scaling'] ?? {},
+      phases: json['phases'] ?? {}, // <--- Lettura Mappa delle Fasi
       poolFast: (pools['fast'] as List).map((i) => OverlordAbility.fromJson(i)).toList(),
       poolMedium: (pools['medium'] as List).map((i) => OverlordAbility.fromJson(i)).toList(),
       poolUltimate: (pools['ultimate'] as List).map((i) => OverlordAbility.fromJson(i)).toList(),
@@ -121,18 +125,17 @@ class OverlordLoadout {
     );
   }
 
-  int getHpFase1(int players) => scaling['hp_fase1'][players.toString()] ?? 30;
-  int getHpFase2(int players) => scaling['hp_fase2'][players.toString()] ?? 25;
-  int getRendita(int players) => scaling['rendita'][players.toString()] ?? 2;
+  int getHpFase1(int players) => scaling['hp_fase1']?[players.toString()] ?? 30;
+  int getHpFase2(int players) => scaling['hp_fase2']?[players.toString()] ?? 25;
+  int getRendita(int players) => scaling['rendita']?[players.toString()] ?? 2;
   
-  // Quando copiamo per il gioco, assicuriamoci di creare nuove istanze delle abilità
-  // così che il loro stato (currentFill) sia indipendente dal repository
   OverlordLoadout copyWithSelection(List<OverlordAbility> selection) {
     // Clona le abilità per resettare i tracciati all'inizio
     List<OverlordAbility> freshSelection = selection.map((s) => s.copyWith(fillState: List.filled(s.costo.length, null))).toList();
     
     return OverlordLoadout(
       id: id, nome: nome, descrizione: descrizione, scaling: scaling,
+      phases: phases, // <--- Inserito nel clone
       poolFast: poolFast, poolMedium: poolMedium, poolUltimate: poolUltimate, poolChaos: poolChaos,
       selected: freshSelection
     );

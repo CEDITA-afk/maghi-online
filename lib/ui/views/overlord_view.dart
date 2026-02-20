@@ -5,18 +5,17 @@ import '../../models/enums.dart';
 
 class OverlordView extends StatefulWidget {
   final BossOverlord boss;
+  final OverlordLoadout bossLoadout; // <--- NUOVO: Permette l'accesso alle Fasi
   final List<OverlordAbility> abilitaBoss;
-  // Callback quando un cubetto viene spostato dalla riserva a un tracciato
   final Function(OverlordAbility, int, Elemento) onAssignCube;
-  // Callback quando un'abilità viene effettivamente lanciata (svuotando il tracciato)
   final Function(OverlordAbility) onCastAbility;
-  
   final VoidCallback onContinue;
   final bool isRoundOver;
 
   const OverlordView({
     super.key, 
     required this.boss, 
+    required this.bossLoadout,
     required this.abilitaBoss,
     required this.onAssignCube,
     required this.onCastAbility,
@@ -29,25 +28,20 @@ class OverlordView extends StatefulWidget {
 }
 
 class _OverlordViewState extends State<OverlordView> {
-  // Il cubetto attualmente selezionato dalla riserva
   Elemento? _selectedCubeFromPool;
 
   void _onPoolCubeTap(Elemento e) {
     setState(() {
       if (_selectedCubeFromPool == e) {
-        _selectedCubeFromPool = null; // Deseleziona
+        _selectedCubeFromPool = null; 
       } else {
-        _selectedCubeFromPool = e; // Seleziona
+        _selectedCubeFromPool = e; 
       }
     });
   }
 
   void _onSlotTap(OverlordAbility skill, int slotIndex) {
     if (_selectedCubeFromPool == null) return;
-
-    // Tenta di inserire il cubetto selezionato nello slot
-    // La logica di compatibilità (es. Jolly) è gestita dentro tryFillSlot nel modello,
-    // ma qui facciamo un check visivo prima di chiamare il callback
     
     bool isSlotEmpty = skill.currentFill[slotIndex] == null;
     if (!isSlotEmpty) return;
@@ -60,13 +54,69 @@ class _OverlordViewState extends State<OverlordView> {
     if (compatible) {
       widget.onAssignCube(skill, slotIndex, _selectedCubeFromPool!);
       setState(() {
-        _selectedCubeFromPool = null; // Resetta selezione dopo assegnazione
+        _selectedCubeFromPool = null; 
       });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text("Colore non compatibile!"), duration: Duration(milliseconds: 500)
       ));
     }
+  }
+
+  // NUOVO: Mostra il testo della scheda boss che legge dinamicamente le Fasi
+  void _showBossRules(BuildContext context) {
+    List<Widget> fasiWidgets = [];
+    if (widget.bossLoadout.phases.isNotEmpty) {
+      // Ordina e visualizza le fasi
+      var keys = widget.bossLoadout.phases.keys.toList()..sort();
+      for (String key in keys) {
+        fasiWidgets.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12.0),
+            child: RichText(
+              text: TextSpan(
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
+                children: [
+                  TextSpan(text: "Fase $key: ", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+                  TextSpan(text: widget.bossLoadout.phases[key]),
+                ],
+              ),
+            ),
+          )
+        );
+      }
+    } else {
+      fasiWidgets.add(const Text("Nessuna fase speciale definita per questo Boss.", style: TextStyle(color: Colors.white70)));
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.grey.shade900,
+        title: Text("Regolamento: ${widget.boss.nome}", style: const TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold)),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(widget.bossLoadout.descrizione, style: const TextStyle(color: Colors.white, fontStyle: FontStyle.italic)),
+              const Divider(color: Colors.white24, height: 24),
+              const Text("FASI DELLO SCONTRO:", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 10),
+              ...fasiWidgets,
+              const Divider(color: Colors.white24, height: 24),
+              const Text(
+                "NOTA: Quando il Boss cambia Fase o applica un debuff, apri la BACHECA in alto a destra e scrivi una nota in modo che tutti i maghi la vedano!",
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CHIUDI"))
+        ],
+      ),
+    );
   }
 
   @override
@@ -77,7 +127,7 @@ class _OverlordViewState extends State<OverlordView> {
       padding: const EdgeInsets.all(12),
       child: Column(
         children: [
-          // 1. RISERVA (POOL)
+          // 1. RISERVA E PULSANTE INFO
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -87,7 +137,17 @@ class _OverlordViewState extends State<OverlordView> {
             ),
             child: Column(
               children: [
-                const Text("RISERVA MANA (Tocca per selezionare)", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text("RISERVA MANA (Tocca per selezionare)", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                    IconButton(
+                      icon: const Icon(Icons.menu_book, color: Colors.purpleAccent),
+                      tooltip: "Leggi Regole Boss",
+                      onPressed: () => _showBossRules(context),
+                    )
+                  ],
+                ),
                 const SizedBox(height: 8),
                 _buildManaPool(),
               ],
@@ -129,7 +189,6 @@ class _OverlordViewState extends State<OverlordView> {
     );
   }
 
-  // Costruisce la riga di cubetti cliccabili dalla riserva del Boss
   Widget _buildManaPool() {
     List<Widget> cubes = [];
     
@@ -162,9 +221,7 @@ class _OverlordViewState extends State<OverlordView> {
     return Wrap(alignment: WrapAlignment.center, children: cubes);
   }
 
-  // Costruisce la Card dell'abilità con il tracciato
   Widget _buildAbilityTrack(OverlordAbility skill) {
-    // Le abilità Caos (costo "Vasca") non usano tracciati classici
     if (skill.tipo == "Caos") return _buildChaosCard(skill);
 
     bool isReady = skill.isReady;
@@ -197,13 +254,11 @@ class _OverlordViewState extends State<OverlordView> {
             Text(skill.effetto, style: const TextStyle(color: Colors.white70, fontSize: 12)),
             const SizedBox(height: 12),
             
-            // IL TRACCIATO (SLOTS)
             Row(
               children: List.generate(skill.costo.length, (index) {
                 Elemento required = skill.costo[index];
                 Elemento? current = skill.currentFill[index];
                 
-                // Determina se questo slot può accettare il cubetto selezionato (per evidenziarlo)
                 bool highlight = false;
                 if (current == null && _selectedCubeFromPool != null) {
                   highlight = (_selectedCubeFromPool == Elemento.jolly) || 

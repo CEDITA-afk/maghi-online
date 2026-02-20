@@ -1,0 +1,99 @@
+{
+  "id": "vesper_01",
+  "name": "Vesper, L'Architetto delle Illusioni",
+  "description": "Un manipolatore che inganna gli Eroi con ombre e trappole, alterando la geometria della mappa e punendo gli spostamenti prevedibili.",
+  "scaling": {
+    "hp_fase1": { "2": 25, "3": 35, "4": 45 },
+    "hp_fase2": { "2": 25, "3": 35, "4": 45 },
+    "rendita": { "2": 3, "3": 2, "4": 1 }
+  },
+  "phases": {
+    "1": "La Caccia nel Labirinto: La presenza del Boss nel dungeon non è certa. Agisce tramite Segnalini Ombra sparsi sulla mappa. Gli attacchi alle Ombre hanno una probabilità percentuale di rivelare Vesper o attivare una trappola.",
+    "2": "L'Arena Geometrica: Si posiziona al centro della mappa (6,7). Evoca 3 Prismi di Luce agli angoli che generano barriere laser dannose.",
+    "3": "Collasso Totale: I Prismi esplodono. L'anello più esterno della griglia 12x14 collassa alla fine di ogni round, restringendo il campo di battaglia."
+  },
+  "pools": {
+    "fast": [
+      {
+        "name": "Spostamento d'Ombra",
+        "type": "Rapida",
+        "phase": 1,
+        "cost": "🔵⚫",
+        "effect": "Scambia la posizione di Vesper con quella di un Segnalino Ombra o di una Barricata."
+      },
+      {
+        "name": "Dardo Psichico",
+        "type": "Rapida",
+        "phase": 1,
+        "cost": "🟡⚫",
+        "effect": "1 Danno e PUSH 2 su un Eroe. Utile per spingere gli Eroi contro le trappole."
+      },
+      {
+        "name": "Creazione Illusoria",
+        "type": "Rapida",
+        "phase": 1,
+        "cost": "🟢⚫",
+        "effect": "Piazza un nuovo Segnalino Ombra ovunque sulla plancia."
+      }
+    ],
+    "medium": [
+      {
+        "name": "Glifo del Silenzio",
+        "type": "Media",
+        "phase": 2,
+        "cost": "🔵🟢⚫",
+        "effect": "[ANCORATA a un Eroe]. Finché non viene disinnescata (1 Azione + 1 Dado scartato), l'Eroe non può lanciare magie Ibride."
+      },
+      {
+        "name": "Rotazione Prismatica",
+        "type": "Media",
+        "phase": 2,
+        "cost": "🔴🟡⚫",
+        "effect": "Ruota i fasci laser dei Prismi. Infligge 2 Danni automatici a chiunque venga attraversato dal raggio durante la rotazione."
+      },
+      {
+        "name": "Mura di Cristallo",
+        "type": "Media",
+        "phase": 2,
+        "cost": "🟢🔵⚫",
+        "effect": "Evoca 2 Barricate o 1 Colonna per bloccare le linee di tiro e separare il gruppo."
+      }
+    ],
+    "ultimate": [
+      {
+        "name": "Soffitto Pericolante",
+        "type": "Ultimate",
+        "phase": 3,
+        "cost": "🔴🔴🟢🟢⚫⚫",
+        "effect": "[ANCORATA a un'Area 3x3]. Dopo 1 turno, l'area collassa infliggendo 6 Danni. Richiede 2 Azioni totali degli Eroi per essere disinnescata."
+      },
+      {
+        "name": "Labirinto Mentale",
+        "type": "Ultimate",
+        "phase": 3,
+        "cost": "🔵🔵🟡🟡⚫⚫",
+        "effect": "Tutti gli Eroi subiscono status Confusione (il prossimo attacco mirato ha il 50% di probabilità di colpire un alleato adiacente) e 3 Danni Psichici."
+      }
+    ],
+    "chaos": [
+      {
+        "name": "Distorsione Spaziale",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "PULL 3 su tutti gli Eroi verso una singola casella bersaglio."
+      },
+      {
+        "name": "Sovraccarico Neurale",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Costringe un Eroe a scartare 2 dadi del suo colore principale dalla sua riserva."
+      },
+      {
+        "name": "Dissolvenza",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Ignora completamente il danno di un singolo incantesimo in arrivo."
+      }
+    ]
+  }
+}

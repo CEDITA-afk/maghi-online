@@ -73,10 +73,14 @@ class _InteractiveMapViewState extends State<InteractiveMapView> {
             onSelected: (value) {
               if (value == 'minion') _showMinionSpawnDialog();
               if (value == 'object') _showObjectSpawnDialog();
+              // NUOVO GESTORE PER LE ETICHETTE TESTUALI
+              if (value == 'text') _showTextSpawnDialog();
             },
             itemBuilder: (context) => [
               const PopupMenuItem(value: 'minion', child: ListTile(leading: Icon(Icons.adb), title: Text("Minion"))),
               const PopupMenuItem(value: 'object', child: ListTile(leading: Icon(Icons.view_quilt), title: Text("Elemento Scenico"))),
+              // NUOVA VOCE NEL MENU
+              const PopupMenuItem(value: 'text', child: ListTile(leading: Icon(Icons.text_fields), title: Text("Etichetta Testuale"))),
             ],
           ),
         ],
@@ -222,6 +226,41 @@ class _InteractiveMapViewState extends State<InteractiveMapView> {
     );
   }
 
+  // NUOVO: Dialog per generare l'etichetta di testo in mappa
+  void _showTextSpawnDialog() {
+    TextEditingController txtCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.grey.shade900,
+        title: const Text("Inserisci Testo", style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: txtCtrl,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: "Es: Ancora Fuoco (5 HP)", 
+            hintStyle: TextStyle(color: Colors.white38)
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Annulla")),
+          ElevatedButton(onPressed: () {
+            if (txtCtrl.text.isNotEmpty) {
+              widget.onSpawnObject(MapObject(
+                id: "txt_${DateTime.now().millisecondsSinceEpoch}", 
+                type: MapObjectType.textLabel, // Il nuovo tipo inserito nel modello
+                x: 4, y: 4, 
+                text: txtCtrl.text, // L'assegnazione della stringa
+                color: Colors.transparent, 
+              ));
+            }
+            Navigator.pop(ctx);
+          }, child: const Text("PIAZZA"))
+        ],
+      ),
+    );
+  }
+
   Widget _buildToolbar() {
     return Container(height: 40, color: Colors.grey.shade900, child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
       IconButton(icon: Icon(_isLockedMode ? Icons.lock : Icons.lock_open, color: _isLockedMode ? Colors.red : Colors.green, size: 20), onPressed: () => setState(() => _isLockedMode = !_isLockedMode)),
@@ -244,9 +283,8 @@ class _InteractiveMapViewState extends State<InteractiveMapView> {
     ]));
   }
 
-  // CORREZIONE COLORE MAGHI
   Widget _buildEntityWidget(GameEntity entity) {
-    Color c = Colors.purple; // Default per Boss
+    Color c = Colors.purple; 
     
     if (entity is Mago) {
       switch (entity.elemento) {
@@ -276,6 +314,29 @@ class _InteractiveMapViewState extends State<InteractiveMapView> {
   }
 
   Widget _buildMapObjectWidget(MapObject obj) {
+    // NUOVO: RENDERIZZAZIONE ETICHETTA TESTUALE
+    if (obj.type == MapObjectType.textLabel) {
+      return Container(
+        width: _cellSize * 2, // Leggermente più largo della casella per contenere testo
+        height: _cellSize * 0.8,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: Colors.black87, 
+          border: Border.all(color: Colors.yellowAccent, width: 1.5), 
+          borderRadius: BorderRadius.circular(4)
+        ),
+        child: Text(
+          obj.text ?? "Testo", 
+          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold), 
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
+
+    // ALTRIMENTI COMPORTAMENTO STANDARD (Muri/Ostacoli)
     double w = obj.isVertical ? _cellSize * 0.8 : _cellSize * obj.length;
     double h = obj.isVertical ? _cellSize * obj.length : _cellSize * 0.8;
     return Container(
@@ -289,7 +350,6 @@ class _InteractiveMapViewState extends State<InteractiveMapView> {
   }
 }
 
-// Painters (GridPainter e RulerPainter) rimangono gli stessi del file precedente
 class GridPainter extends CustomPainter {
   final int rows, cols; final double cellSize;
   GridPainter({required this.rows, required this.cols, required this.cellSize});

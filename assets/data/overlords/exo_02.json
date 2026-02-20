@@ -1,0 +1,99 @@
+{
+  "id": "exo_02",
+  "name": "EXO-02: Il Colosso Forgia-Anime",
+  "description": "Un gigante industriale che altera la topografia del campo di battaglia e fonde gli elementi per creare zone letali.",
+  "scaling": {
+    "hp_fase1": { "2": 25, "3": 35, "4": 45 },
+    "hp_fase2": { "2": 20, "3": 30, "4": 40 },
+    "rendita": { "2": 3, "3": 2, "4": 1 }
+  },
+  "phases": {
+    "1": "La Caccia (L'Inganno): All'inizio della partita, la presenza del Boss nel dungeon non è certa. Sulla griglia vengono sparsi 6 Segnalini Anomalia. Ispezionare o attaccare un segnalino ha una probabilità percentuale di rivelare il Boss; in caso di fallimento innesca una trappola esplosiva (es. pozza di scorie).",
+    "2": "Accensione Fornaci: Quando il Boss scende al 60% degli HP, si rivela completamente e sblocca le abilità Medie (Costi Misti). Inizia a fondere gli elementi sulla plancia per creare ostacoli letali come muri di vapore o zone elettrificate.",
+    "3": "Fusione del Nucleo: Al 30% degli HP, il Boss sblocca le Ultimate. Consuma le enormi riserve di dadi misti accumulate nelle fasi precedenti per riempire la mappa di pericoli permanenti e scatenare attacchi ad area."
+  },
+  "pools": {
+    "fast": [
+      {
+        "name": "Lancio Scorie",
+        "type": "Rapida",
+        "phase": 1,
+        "cost": "🔴⚫",
+        "effect": "2 Danni + Applica Bruciato"
+      },
+      {
+        "name": "Emissione Tossica",
+        "type": "Rapida",
+        "phase": 1,
+        "cost": "🟢⚫",
+        "effect": "Crea una Casella Acido (1 Danno se attraversata)"
+      },
+      {
+        "name": "Riposizionamento Idraulico",
+        "type": "Rapida",
+        "phase": 1,
+        "cost": "🔵⚫",
+        "effect": "Muovi di 4 caselle ignorando gli ostacoli"
+      }
+    ],
+    "medium": [
+      {
+        "name": "Geyser di Vapore",
+        "type": "Media",
+        "phase": 2,
+        "cost": "🔴🔵⚫",
+        "effect": "Crea un Muro di Vapore 1x3. Blocca la linea di tiro e infligge 2 Danni a chi lo attraversa"
+      },
+      {
+        "name": "Gabbia Elettrificata",
+        "type": "Media",
+        "phase": 2,
+        "cost": "🟡🟢⚫",
+        "effect": "Applica Conduttore a un bersaglio + Immobilizzato per 1 round"
+      },
+      {
+        "name": "Sovraccarico Reattivo",
+        "type": "Media",
+        "phase": 2,
+        "cost": "🔴🟡⚫",
+        "effect": "Reazione: Quando colpito, infligge 3 Danni all'attaccante e fa PUSH 2"
+      }
+    ],
+    "ultimate": [
+      {
+        "name": "Eruzione del Nucleo",
+        "type": "Ultimate",
+        "phase": 3,
+        "cost": "🔴🔴🟢🟢⚫⚫",
+        "effect": "Scegli un'area 3x3. Trasformala permanentemente in Lava (2 Danni a turno). Rimuove ogni copertura."
+      },
+      {
+        "name": "Tempesta Magnetica",
+        "type": "Ultimate",
+        "phase": 3,
+        "cost": "🔵🔵🟡🟡⚫⚫",
+        "effect": "Attira tutti gli Eroi di 4 caselle verso il Boss. Applica Conduttore e 4 Danni a chi finisce adiacente."
+      }
+    ],
+    "chaos": [
+      {
+        "name": "Raffreddamento d'Emergenza",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Converti fino a 3 Caselle Lava in Caselle Roccia (Copertura)"
+      },
+      {
+        "name": "Assimilazione",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Distruggi una Copertura per recuperare 4 HP"
+      },
+      {
+        "name": "Scambiatore di Calore",
+        "type": "Caos",
+        "cost": "Vasca",
+        "effect": "Scarta 2 Dadi a scelta degli Eroi e guadagna 1 Azione Rapida"
+      }
+    ]
+  }
+}
