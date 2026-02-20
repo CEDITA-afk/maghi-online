@@ -20,11 +20,11 @@ class OverlordAbility {
   factory OverlordAbility.fromJson(Map<String, dynamic> json) {
     List<Elemento> parsedCost = _parseIcons(json['cost'] ?? "");
     return OverlordAbility(
-      nome: json['name'] ?? "Senza nome",
+      nome: json['name'] ?? "Abilità senza nome",
       tipo: json['type'] ?? "Rapida",
       costo: parsedCost,
       costoDescrizione: json['cost'] ?? "",
-      effetto: json['effect'] ?? "Nessun effetto.",
+      effetto: json['effect'] ?? "Nessun effetto descritto.",
       fillState: List.filled(parsedCost.length, null),
     );
   }
@@ -69,7 +69,7 @@ class OverlordLoadout {
   final String nome;
   final String descrizione;
   final Map<String, dynamic> scaling;
-  final Map<String, dynamic> phases; // Gestione Fasi dinamiche
+  final Map<String, dynamic> phases;
 
   final List<OverlordAbility> poolFast;
   final List<OverlordAbility> poolMedium;
@@ -87,26 +87,33 @@ class OverlordLoadout {
   factory OverlordLoadout.fromJson(Map<String, dynamic> json) {
     var pools = json['pools'] ?? {};
     return OverlordLoadout(
-      id: json['id'] ?? DateTime.now().toString(), 
-      nome: json['name'] ?? "Boss Sconosciuto", 
-      descrizione: json['description'] ?? "Nessuna descrizione.", 
+      id: json['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(), 
+      nome: json['name'] ?? "Boss Ignoto", 
+      descrizione: json['description'] ?? "Nessuna descrizione disponibile.", 
       scaling: json['scaling'] ?? {},
       phases: json['phases'] ?? {},
-      poolFast: (pools['fast'] as List? ?? []).map((i) => OverlordAbility.fromJson(i)).toList(),
-      poolMedium: (pools['medium'] as List? ?? []).map((i) => OverlordAbility.fromJson(i)).toList(),
-      poolUltimate: (pools['ultimate'] as List? ?? []).map((i) => OverlordAbility.fromJson(i)).toList(),
-      poolChaos: (pools['chaos'] as List? ?? []).map((i) => OverlordAbility.fromJson(i)).toList(),
+      poolFast: _parseList(pools['fast']),
+      poolMedium: _parseList(pools['medium']),
+      poolUltimate: _parseList(pools['ultimate']),
+      poolChaos: _parseList(pools['chaos']),
     );
+  }
+
+  static List<OverlordAbility> _parseList(dynamic list) {
+    if (list == null || list is! List) return [];
+    return list.map((i) => OverlordAbility.fromJson(i)).toList();
   }
 
   int getHpFase1(int players) {
     var val = scaling['hp_fase1']?[players.toString()];
-    return val is int ? val : 30;
+    if (val == null) return 30;
+    return (val is int) ? val : int.tryParse(val.toString()) ?? 30;
   }
   
   int getRendita(int players) {
     var val = scaling['rendita']?[players.toString()];
-    return val is int ? val : 2;
+    if (val == null) return 2;
+    return (val is int) ? val : int.tryParse(val.toString()) ?? 2;
   }
   
   OverlordLoadout copyWithSelection(List<OverlordAbility> selection) {
